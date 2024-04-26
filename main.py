@@ -7,34 +7,42 @@ from typing import Final
 
 app = Flask(__name__)
 
-COMPILE: Final[list[str]] = ["swipl", "-O", "-q", "--toplevel=main", "--stand_alone=true", "-o", "main", "-c", "main.pl" ]
+EXECUTE_QUERY: Final[list[str]] = ['swipl --quiet -f main.pl -g main -g halt']
 
-EXECUTE_QUERY: Final[list[str]] = ['/main']
-
-def compile_prolog_query() -> None:
-    subprocess.run(COMPILE)
-
-def execute_prolog_query() -> str:
+def execute_query() -> str:
     status = subprocess.run(EXECUTE_QUERY, capture_output=True)
     return status.stdout.decode("utf-8")
 
-@app.route('/query/engine', methods=['POST'])
-def query_engine():
-    sent_prolog_fl = request.files['source']
+@app.route('/check/<cve>', methods=['POST'])
+def check(cve):
 
-    # read prolog program to memory
-    prolog_query = sent_prolog_fl.read()
+    # the client only sends the knowledge base (kb)
+    # prolog file. the "utils" and actual cve
+    # scanner alreay exist on the server
+    kb_prolog_fl = request.files['source']
+
+    # read prolog kb to memory
+    kb = kb_prolog_fl.read()
 
     # persist to (temporary) file on server
-    with open('main.pl', 'w') as fl:
-        fl.write(prolog_query.decode("utf-8"))
+    # TODO: this is awful ... this mechanism
+    # should be changed ASAP ...
+    with open('kb.pl', 'w') as fl:
+        fl.write(kb.decode("utf-8"))
 
-    # compile prolog query to native binary
-    # all the filenames are hard coded
-    # resulting binary name: main
-    compile_prolog_query()
+    # prepare the prolog cve query
+    # by simply replacing the template
+    # cve rule with the actual cve
+    with open(f'cves/{cve}.txt') as fl:
+        actual_cve = fl.read()
+
+    with open('template.pl') as fl:
+        program = fl.read()
+
+    with open('main.pl', 'w') as fl:
+        fl.write(program.replace('template_cve', actual_cve))
 
     # execute query and capture result
-    result = execute_prolog_query()
+    result = execute_query()
 
     return f'>>> {result}'

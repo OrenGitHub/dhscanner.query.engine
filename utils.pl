@@ -7,7 +7,7 @@ utils_user_input_might_reach_function_whose_fqn_is(Fqn) :-
 
 utils_concrete_user_input_might_reach_function_call(UserInput, Call) :-
     utils_user_input(UserInput),
-    kb_function_call(Call),
+    kb_call(Call),
     kb_dataflow_path(UserInput, Arg),
     kb_argument_for_call(Arg, Call).
 
@@ -23,6 +23,5 @@ utils_user_input_originated_from_express_post_request_params(UserInput) :-
     kb_param_has_name(UserInput, 'req').
 
 utils_express_post_handler(Call) :-
-    kb_function_call(Call),
+    kb_call(Call),
     kb_has_fqn(Call, 'npm.express.post').
-
