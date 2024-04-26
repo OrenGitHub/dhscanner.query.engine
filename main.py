@@ -7,7 +7,7 @@ from typing import Final
 
 app = Flask(__name__)
 
-EXECUTE_QUERY: Final[list[str]] = ['swipl --quiet -f main.pl -g main -g halt']
+EXECUTE_QUERY: Final[list[str]] = ['swipl', '--quiet', '-f', 'main.pl', '-g', 'main', '-g', 'halt']
 
 def execute_query() -> str:
     status = subprocess.run(EXECUTE_QUERY, capture_output=True)
