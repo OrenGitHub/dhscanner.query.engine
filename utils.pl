@@ -17,7 +17,7 @@ utils_user_input(UserInput) :-
 
 utils_user_input_originated_from_express_post_request_params(UserInput) :-
     utils_express_post_handler(Call),
-    kb_second_arg_for_call(Callback, Call),
+    kb_arg_for_call(Callback, Call),
     kb_callable(Callback),
     kb_callable_has_param(Callback, UserInput),
     kb_param_has_name(UserInput, 'req').
