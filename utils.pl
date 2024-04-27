@@ -8,8 +8,8 @@ utils_user_input_might_reach_function_whose_fqn_is(Fqn) :-
 utils_concrete_user_input_might_reach_function_call(UserInput, Call) :-
     utils_user_input(UserInput),
     kb_call(Call),
-    kb_dataflow_path(UserInput, Arg),
-    kb_argument_for_call(Arg, Call).
+    utils_dataflow_path(UserInput, Arg),
+    kb_arg_for_call(Arg, Call).
 
 utils_user_input(UserInput) :-
     utils_user_input_originated_from_express_post_request_params(UserInput).
@@ -25,3 +25,17 @@ utils_user_input_originated_from_express_post_request_params(UserInput) :-
 utils_express_post_handler(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'npm.express.post').
+
+% until the abstract interpretation is working ...
+utils_dataflow_path(U, V) :- kb_dataflow_edge(U,V).
+utils_dataflow_path(U, V) :- kb_dataflow_edge(U,W), kb_dataflow_edge(W,V).
+utils_dataflow_path(U, V) :- kb_dataflow_edge(U,W), kb_dataflow_edge(W,X), kb_dataflow_edge(X,V).
+utils_dataflow_path(U, V) :- kb_dataflow_edge(U,W), kb_dataflow_edge(W,X), kb_dataflow_edge(X,Y), kb_dataflow_edge(Y,V).
+utils_dataflow_path(U, V) :- kb_dataflow_edge(U,W), kb_dataflow_edge(W,X), kb_dataflow_edge(X,Y), kb_dataflow_edge(Y,Z), kb_dataflow_edge(Z,V).
+utils_dataflow_path(U, V) :-
+    kb_dataflow_edge(U,W),
+    kb_dataflow_edge(W,X),
+    kb_dataflow_edge(X,Y),
+    kb_dataflow_edge(Y,Z),
+    kb_dataflow_edge(Z,T),
+    kb_dataflow_edge(T,V).
