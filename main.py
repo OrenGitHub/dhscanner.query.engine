@@ -13,6 +13,10 @@ def execute_query() -> str:
     status = subprocess.run(EXECUTE_QUERY, capture_output=True)
     return status.stdout.decode("utf-8")
 
+@app.route('/healthcheck', methods=['GET'])
+def healthcheck():
+    return { 'healthy': True }
+
 @app.route('/check/<cve>', methods=['POST'])
 def check(cve):
 
