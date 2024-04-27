@@ -11,4 +11,4 @@ COPY . .
 ENV FLASK_APP=main.py
 EXPOSE 5000
 COPY --from=backend . /
-# CMD ["flask", "run", "--host", "0.0.0.0"]
+CMD ["flask", "run", "--host", "0.0.0.0"]
