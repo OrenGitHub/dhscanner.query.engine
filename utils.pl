@@ -11,31 +11,42 @@ utils_concrete_user_input_might_reach_function_call(UserInput, Call) :-
     utils_dataflow_path(UserInput, Arg),
     kb_arg_for_call(Arg, Call).
 
-utils_user_input(UserInput) :- utils_user_input_originated_from_express_post_request_params(UserInput).
-utils_user_input(UserInput) :- utils_user_input_originated_from_laravel_post_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_composer_laravel_post_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput).
 % add more web frameworks here ...
 
-utils_user_input_originated_from_laravel_post_request_params(UserInput) :-
-    utils_laravel_post_handler(Call),
+utils_user_input_originated_from_composer_laravel_post_request_params(UserInput) :-
+    utils_composer_laravel_post_handler(Call),
     kb_arg_for_call(Callback, Call),
     kb_callable(Callback),
     kb_callable_has_param(Callback, UserInput),
     kb_param_has_name(UserInput, 'request').
 
-utils_user_input_originated_from_express_post_request_params(UserInput) :-
-    utils_express_post_handler(Call),
+utils_user_input_originated_from_npm_express_post_request_params(UserInput) :-
+    utils_npm_express_post_handler(Call),
     kb_arg_for_call(Callback, Call),
     kb_callable(Callback),
     kb_callable_has_param(Callback, UserInput),
     kb_param_has_name(UserInput, 'req').
 
-utils_laravel_post_handler(Call) :-
+utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput) :-
+    utils_pip_gradio_button_click(Call),
+    kb_arg_for_call(Callback, Call),
+    kb_callable(Callback),
+    kb_callable_has_param(Callback, UserInput).
+
+utils_composer_laravel_post_handler(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'composer.Illuminate.Support.Facades.Route.post').
 
-utils_express_post_handler(Call) :-
+utils_npm_express_post_handler(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'npm.express.post').
+
+utils_pip_gradio_button_click(Call) :-
+    kb_call(Call),
+    kb_has_fqn(Call, 'gradio.Button.click').
 
 % until the abstract interpretation is working ...
 utils_dataflow_path(U, V) :- kb_dataflow_edge(U,V).
