@@ -1,1 +1,1 @@
-user_input_might_reach_function('gem.rails.ActiveRecord.find_by_sql')
+user_input_might_reach_method('gem.rails.ActiveRecord.find_by_sql')
