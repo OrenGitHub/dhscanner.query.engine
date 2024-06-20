@@ -15,6 +15,16 @@ strrchr(String, Value) :-
     sub_string(String, _, 1, _, '.'),
     \+ sub_string(Value, _, 1, _, '.').
 
+utils_endswith(Haystack, Needle) :-
+    sub_string(Haystack, _, _, 0, Needle).
+
+user_input_might_reach_function_suffixed_by(Pqn) :-
+    utils_user_input_might_reach_function_whose_pqn_is(Pqn).
+
+utils_user_input_might_reach_function_whose_pqn_is(Pqn) :-
+    utils_user_input_might_reach_callable_whose_fqn_is(Fqn),
+    utils_endswith(Fqn, Pqn).
+
 utils_user_input_might_reach_callable_whose_fqn_is(Fqn) :-
     utils_user_input_might_reach_function_whose_fqn_is(Fqn).   
 
