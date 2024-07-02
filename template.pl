@@ -1,3 +1,6 @@
+:- style_check(-singleton).       % to reduce debugging noise
+:- discontiguous kb_class_name/2. % to reduce debugging noise
+
 :- [ kb ].    % entire source code as prolog knowledge base
 :- [ utils ]. % repetitive elements for *many* scanners
 

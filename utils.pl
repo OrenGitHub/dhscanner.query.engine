@@ -38,8 +38,15 @@ utils_user_input_might_reach_function_whose_fqn_is(Fqn) :-
 utils_concrete_user_input_might_reach_function_call(UserInput, Call) :-
     utils_user_input(UserInput),
     kb_call(Call),
-    utils_dataflow_path(UserInput, Arg),
+    utils_dataflow_path(UserInput, Call),
     kb_arg_for_call(Arg, Call).
+
+% This is for cases like Ruby's SomeClass.method.call
+% it is not labeled as a call, since at the syntactic level
+% it's just an expression ( fixed while working on CVE-2024-33667 )
+utils_concrete_user_input_might_reach_function_call(UserInput, Call) :-
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Call).
 
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_composer_laravel_post_request_params(UserInput).

@@ -1,1 +1,1 @@
-user_input_might_reach_function_suffixed_by('method.call')
+user_input_might_reach_function('str.constantize.method.call')
