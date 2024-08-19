@@ -82,13 +82,13 @@ utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput) :-
 
 utils_user_input_originated_from_ruby_rails_post_request_params(UserInput) :-
     utils_ruby_rails_class_controller(Class),
-    kb_method_of_class(_, Class), % <--- Method ...
-    %kb_variable_inside_method(UserInput, Method),
+    kb_method_of_class(Method, Class),
+    kb_variable_inside_method(UserInput, Method),
     kb_has_fqn(UserInput, 'params').
 
 utils_ruby_rails_class_controller(Class) :-
-    kb_class_name(Class, Name),
-    utils_ends_with(Name, 'Controller').
+    utils_subclass_of(Class, ApplicationController),
+    kb_class_name( ApplicationController, 'ApplicationController' ).
 
 utils_ends_with(Haystack, Needle) :-
     sub_atom(Haystack, _, _, _, Needle). 
@@ -104,6 +104,11 @@ utils_npm_express_post_handler(Call) :-
 utils_pip_gradio_button_click(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'gradio.Button.click').
+
+utils_subclass_of(Subclass, Super) :- kb_subclass_of(Subclass, Super).
+utils_subclass_of(Subclass, Super) :-
+    utils_subclass_of(Subclass, C),
+    kb_subclass_of(C, Super).
 
 utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
 utils_dataflow_edge(Arg, Param) :-
