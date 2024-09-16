@@ -10,8 +10,25 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post
 utils_user_input(UserInput) :- utils_user_input_originated_from_composer_laravel_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_ruby_rails_post_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_php_wordpress_plugin_action(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput).
 % add more web frameworks here ...
+
+% note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
+% example: (CVE-2024-7856)
+% code: add_action('wp_ajax_removeTempFiles', array($this, 'removeTempFiles'));
+% method: --------------------------------------------------^^^^^^^^^^^^^^^
+utils_user_input_originated_from_php_wordpress_plugin_action(UserInput) :-
+    kb_call(WordpressAction),
+    kb_has_fqn(WordpressAction,'add_action'),
+    kb_arg_for_call(ConstArray,WordpressAction),
+    kb_call(ConstArray),
+    kb_has_fqn(ConstArray,'arrayify'),
+    kb_arg_for_call(Callback,ConstArray),
+    kb_const_string(Callback,Fqn),
+    kb_has_fqn(Method, Fqn),
+    kb_var_in_method(UserInput, Method),
+    kb_has_fqn(UserInput, 'filter_input').
 
 utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput) :-
     kb_callable(Callable),
