@@ -1,9 +1,9 @@
 :- style_check(-singleton).
 
-user_input_might_reach_function(Fqn) :-
+user_input_might_reach_function(Fqn, Path) :-
     kb_call(Call),
     kb_has_fqn(Call, Fqn),
-    utils_dataflow_path(UserInput, Call),
+    utils_dataflow_path(UserInput, Call, Path),
     utils_user_input(UserInput).
 
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post_request_params(UserInput).
@@ -89,58 +89,14 @@ utils_dataflow_edge(Arg, Param) :-
     kb_has_fqn(Callable, Fqn),
     kb_callable_has_param(Callable, Param).
 
-% until the abstract interpretation is working ...
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,X),
-    utils_dataflow_edge(X,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,X),
-    utils_dataflow_edge(X,Y),
-    utils_dataflow_edge(Y,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,X),
-    utils_dataflow_edge(X,Y),
-    utils_dataflow_edge(Y,Z),
-    utils_dataflow_edge(Z,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,X),
-    utils_dataflow_edge(X,Y),
-    utils_dataflow_edge(Y,Z),
-    utils_dataflow_edge(Z,T),
-    utils_dataflow_edge(T,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,W),
-    utils_dataflow_edge(W,X),
-    utils_dataflow_edge(X,Y),
-    utils_dataflow_edge(Y,Z),
-    utils_dataflow_edge(Z,T),
-    utils_dataflow_edge(T,M),
-    utils_dataflow_edge(M,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,A),
-    utils_dataflow_edge(A,B),
-    utils_dataflow_edge(B,C),
-    utils_dataflow_edge(C,D),
-    utils_dataflow_edge(D,E),
-    utils_dataflow_edge(E,F),
-    utils_dataflow_edge(F,G),
-    utils_dataflow_edge(G,V).
-utils_dataflow_path(U, V) :-
-    utils_dataflow_edge(U,A),
-    utils_dataflow_edge(A,B),
-    utils_dataflow_edge(B,C),
-    utils_dataflow_edge(C,D),
-    utils_dataflow_edge(D,E),
-    utils_dataflow_edge(E,F),
-    utils_dataflow_edge(F,G),
-    utils_dataflow_edge(G,H),
-    utils_dataflow_edge(H,V).
+utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
+    N >= 1,
+    edge(A,B).
+utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
+    N >= 2,
+    edge(A,C),
+    N_MINUS_1 is N - 1,
+    path(C,B,N_MINUS_1,Path).
+
+utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,8,Path).
+
