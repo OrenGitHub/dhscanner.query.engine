@@ -43,11 +43,11 @@ def check():
         f.write(f':- [ {kb_filename} ].\n')
         f.write(':- [ utils ].\n\n')
         for i, query in enumerate(queries):
-            query_with_path = query.replace(').', f',Path{i}).')
+            query_with_path = query.replace(').', f'Path{i}).')
             f.write(f'q{i}(Path{i}) :- {query_with_path}\n')
         f.write('\n')
         f.write('queries([\n')
-        f.write()
+        f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)])
         f.write(']).\n\n')
         f.write('main :-\n')
         f.write('    queries(QueryList),\n')
