@@ -1,52 +1,60 @@
 from flask import Flask
 from flask import request
 
+import tempfile
 import subprocess
 
 from typing import Final
 
 app = Flask(__name__)
 
-EXECUTE_QUERY: Final[list[str]] = ['swipl', '--quiet', '-f', 'main.pl', '-g', 'main', '-g', 'halt']
+EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
 
-def execute_query() -> str:
-    status = subprocess.run(EXECUTE_QUERY, capture_output=True)
-    return status.stdout.decode("utf-8")
+def execute_query(prolog_filename: str) -> str:
+    status = subprocess.run(
+        EXECUTE_QUERY.format(PROLOG_FILE=prolog_filename),
+        capture_output=True
+    )
+    return status.stdout.decode('utf-8')
 
 @app.route('/healthcheck', methods=['GET'])
 def healthcheck():
     return { 'healthy': True }
 
-@app.route('/check/<cve>', methods=['POST'])
-def check(cve):
+@app.route('/check', methods=['POST'])
+def check():
 
-    # the client only sends the knowledge base (kb)
-    # prolog file. the "utils" and actual cve
-    # scanner alreay exist on the server
-    kb_prolog_fl = request.files['source']
+    kb_fl = request.files['kb']
+    queries_fl = request.files['queries']
 
-    # read prolog kb to memory
-    kb = kb_prolog_fl.read()
+    kb = kb_fl.read()
+    queries = queries_fl.readlines()
 
-    # persist to (temporary) file on server
-    # TODO: this is awful ... this mechanism
-    # should be changed ASAP ...
-    with open('kb.pl', 'w') as fl:
-        fl.write(kb.decode("utf-8"))
+    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+        kb_filename = f.name
+        f.write(kb)
 
-    # prepare the prolog cve query
-    # by simply replacing the template
-    # cve rule with the actual cve
-    with open(f'cves/{cve}.txt') as fl:
-        actual_cve = fl.read()
+    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+        queries_filename = f.name
+        f.write(queries)
 
-    with open('template.pl') as fl:
-        program = fl.read()
+    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+        main_filename = f.name
+        f.write(f':- [ {kb_filename} ].\n')
+        f.write(':- [ utils ].\n\n')
+        for i, query in enumerate(queries):
+            query_with_path = query.replace(').', f',Path{i}).')
+            f.write(f'q{i}(Path{i}) :- {query_with_path}\n')
+        f.write('\n')
+        f.write('queries([\n')
+        f.write()
+        f.write(']).\n\n')
+        f.write('main :-\n')
+        f.write('    queries(QueryList),\n')
+        f.write('    forall(\n')
+        f.write('        member(Query, QueryList),\n'
+        f.write('        (Query -> write(Query), write(\': yes\'), nl ; write(Query), write(\': no\'), nl)\n')
+        f.write(').')
 
-    with open('main.pl', 'w') as fl:
-        fl.write(program.replace('template_cve', actual_cve))
-
-    # execute query and capture result
-    result = execute_query()
-
+    result = execute_query(main_filename)
     return f'>>> {result}'
