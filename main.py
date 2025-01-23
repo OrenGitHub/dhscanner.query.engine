@@ -30,31 +30,28 @@ def check():
     kb = kb_fl.read()
     queries = queries_fl.readlines()
 
-    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".pl", delete=False) as f:
         kb_filename = f.name
         f.write(kb)
-
-    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
-        queries_filename = f.name
-        f.write(queries)
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         main_filename = f.name
         f.write(f':- [ {kb_filename} ].\n')
         f.write(':- [ utils ].\n\n')
         for i, query in enumerate(queries):
-            query_with_path = query.replace(').', f'Path{i}).')
+            str_query = query.decode("utf-8")
+            query_with_path = str_query.replace(').', f'Path{i}).')
             f.write(f'q{i}(Path{i}) :- {query_with_path}\n')
         f.write('\n')
         f.write('queries([\n')
-        f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)])
+        f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)]))
         f.write(']).\n\n')
         f.write('main :-\n')
         f.write('    queries(QueryList),\n')
         f.write('    forall(\n')
-        f.write('        member(Query, QueryList),\n'
+        f.write('        member(Query, QueryList),\n')
         f.write('        (Query -> write(Query), write(\': yes\'), nl ; write(Query), write(\': no\'), nl)\n')
-        f.write(').')
+        f.write('    ).')
 
     result = execute_query(main_filename)
     return f'>>> {result}'
