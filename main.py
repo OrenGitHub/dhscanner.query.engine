@@ -13,7 +13,8 @@ EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
 def execute_query(prolog_filename: str) -> str:
     status = subprocess.run(
         EXECUTE_QUERY.format(PROLOG_FILE=prolog_filename),
-        capture_output=True
+        capture_output=True,
+        shell=True
     )
     return status.stdout.decode('utf-8')
 
@@ -36,11 +37,11 @@ def check():
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         main_filename = f.name
-        f.write(f':- [ {kb_filename} ].\n')
-        f.write(':- [ utils ].\n\n')
+        f.write(f':- [ \'{kb_filename}\' ].\n')
+        f.write(':- [ \'/queryengine/utils\' ].\n\n')
         for i, query in enumerate(queries):
             str_query = query.decode("utf-8")
-            query_with_path = str_query.replace(').', f'Path{i}).')
+            query_with_path = str_query.replace(').', f', Path{i}).')
             f.write(f'q{i}(Path{i}) :- {query_with_path}\n')
         f.write('\n')
         f.write('queries([\n')
