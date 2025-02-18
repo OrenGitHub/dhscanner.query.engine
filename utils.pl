@@ -12,7 +12,17 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_gradio_butto
 utils_user_input(UserInput) :- utils_user_input_originated_from_ruby_rails_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_php_wordpress_plugin_action(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 % add more web frameworks here ...
+
+% FIXME: kb_has_fqn(Call, 'get_query_argument')
+utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput) :-
+    kb_call(Call),
+    kb_has_fqn(Call, 'LoginHandler.get_query_argument'),
+    kb_called_from_method(Call, Method),
+    kb_has_fqn(Method, 'post'),
+    kb_method_of_class(Method, Class),
+    utils_subclass_of(Class, 'tornado.web.RequestHandler').
 
 % note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
 % example: (CVE-2024-7856)
