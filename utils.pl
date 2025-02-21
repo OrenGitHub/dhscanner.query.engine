@@ -3,8 +3,8 @@
 user_input_might_reach_function(Fqn, Path) :-
     kb_call(Call),
     kb_has_fqn(Call, Fqn),
-    utils_dataflow_path(UserInput, Call, Path),
-    utils_user_input(UserInput).
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Call, Path).
 
 user_input_might_reach_function_parts(FqnPart0, FqnPart1, Path) :-
     kb_call(Call),
@@ -94,10 +94,17 @@ utils_pip_gradio_button_click(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'gradio.Button.click').
 
-utils_subclass_of(Subclass, Super) :- kb_subclass_of(Subclass, Super).
-utils_subclass_of(Subclass, Super) :-
-    utils_subclass_of(Subclass, C),
-    kb_subclass_of(C, Super).
+utils_bounded_subclass_of(Subclass,Super,N) :-
+    N >= 1,
+    kb_subclass_of(Subclass,Super).
+
+utils_bounded_subclass_of(Subclass,Super,N) :-
+    N >= 2,
+    kb_subclass_of(Subclass,Class),
+    N_MINUS_1 is N - 1,
+    utils_bounded_subclass_of(Class,Super,N_MINUS_1).
+
+utils_subclass_of(Subclass,Super) :- utils_bounded_subclass_of(Subclass,Super,2).
 
 utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
 utils_dataflow_edge(Arg, Param) :-
@@ -108,12 +115,12 @@ utils_dataflow_edge(Arg, Param) :-
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
-    edge(A,B).
+    utils_dataflow_edge(A,B).
+
 utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     N >= 2,
-    edge(A,C),
+    utils_dataflow_edge(A,C),
     N_MINUS_1 is N - 1,
-    path(C,B,N_MINUS_1,Path).
+    utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
 utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,8,Path).
-
