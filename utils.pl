@@ -6,6 +6,13 @@ user_input_might_reach_function(Fqn, Path) :-
     utils_dataflow_path(UserInput, Call, Path),
     utils_user_input(UserInput).
 
+user_input_might_reach_function_parts(Part0, Part1, Path) :-
+    kb_call(Call),
+    kb_has_fqn_parts(Call, 0, Part0),
+    kb_has_fqn_parts(Call, 1, Part1),
+    utils_dataflow_path(UserInput, Call, Path),
+    utils_user_input(UserInput).
+
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_composer_laravel_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput).
@@ -15,14 +22,15 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 % add more web frameworks here ...
 
-% FIXME: kb_has_fqn(Call, 'get_query_argument')
-utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput) :-
+utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
     kb_call(Call),
-    kb_has_fqn(Call, 'LoginHandler.get_query_argument'),
+    kb_has_fqn_parts(Call, 0, ClassFqn),
+    kb_has_fqn_parts(Call, 1, 'get_query_argument'),
+    kb_class_name(Class, ClassFqn),
+    utils_subclass_of(Class, 'tornado.web.RequestHandler'),
     kb_called_from_method(Call, Method),
     kb_has_fqn(Method, 'post'),
-    kb_method_of_class(Method, Class),
-    utils_subclass_of(Class, 'tornado.web.RequestHandler').
+    kb_method_of_class(Method, Class).
 
 % note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
 % example: (CVE-2024-7856)
