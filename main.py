@@ -18,16 +18,17 @@ def execute_query(prolog_filename: str) -> str:
     )
     return status.stdout.decode('utf-8')
 
-def variant1(query: str) -> Optional[str]:
+def variant1(bytes_query) -> Optional[str]:
+    query = bytes_query.decode("utf-8")
     positions = [match.start() for match in re.finditer(r"'", query)]
     if len(positions) == 2:
         start = positions[0] + 1
         end = positions[1]
         fqn = query[start:end]
-        parts = fqn.aplit('.')
+        parts = fqn.split('.')
         if len(parts) > 1:
-            part0 = '\'' + parts[0] + '\''
-            part1 = '\'' + '.'.join(parts[1:]) + '\''
+            part0 = '\'' + '.'.join(parts[:-1]) + '\''
+            part1 = '\'' + parts[-1] + '\''
             new_query = f'user_input_might_reach_function_parts({part0}, {part1}).'
             return new_query
 
@@ -36,7 +37,7 @@ def variant1(query: str) -> Optional[str]:
 def expand(queries: list[str]) -> list[str]:
     expanded = []
     for query in queries:
-        expanded.append(query)
+        expanded.append(query.decode('utf-8'))
         variant = variant1(query)
         if variant is not None:
             expanded.append(variant)
@@ -68,12 +69,13 @@ def check():
 
     with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
         main_filename = f.name
+        f.write(':- style_check(-singleton).\n')
+        f.write(':- discontiguous kb_class_name/2.\n\n')
         f.write(f':- [ \'{kb_filename}\' ].\n')
         f.write(':- [ \'/queryengine/utils\' ].\n\n')
         for i, query in enumerate(queries):
-            str_query = query.decode("utf-8")
-            query_with_path = str_query.replace(').', f', Path{i}).')
-            f.write(f'q{i}(Path{i}) :- {query_with_path}\n')
+            query_with_path = query.replace(').', f', Path{i}).')
+            f.write(f'q{i}(Path{i}) :- {query_with_path}')
         f.write('\n')
         f.write('queries([\n')
         f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)]))
