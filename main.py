@@ -4,7 +4,7 @@ from flask import request
 import tempfile
 import subprocess
 
-from typing import Final
+from typing import Final, Optional
 
 app = Flask(__name__)
 
@@ -18,6 +18,31 @@ def execute_query(prolog_filename: str) -> str:
     )
     return status.stdout.decode('utf-8')
 
+def variant1(query: str) -> Optional[str]:
+    positions = [match.start() for match in re.finditer(r"'", query)]
+    if len(positions) == 2:
+        start = positions[0] + 1
+        end = positions[1]
+        fqn = query[start:end]
+        parts = fqn.aplit('.')
+        if len(parts) > 1:
+            part0 = '\'' + parts[0] + '\''
+            part1 = '\'' + '.'.join(parts[1:]) + '\''
+            new_query = f'user_input_might_reach_function_parts({part0}, {part1}).'
+            return new_query
+
+    return None
+
+def expand(queries: list[str]) -> list[str]:
+    expanded = []
+    for query in queries:
+        expanded.append(query)
+        variant = variant1(query)
+        if variant is not None:
+            expanded.append(variant)
+
+    return expanded
+
 @app.route('/healthcheck', methods=['GET'])
 def healthcheck():
     return { 'healthy': True }
@@ -30,6 +55,12 @@ def check():
 
     kb = kb_fl.read()
     queries = queries_fl.readlines()
+
+    # until the query api improves,
+    # and finer grained fqn manipulations are
+    # enabled for the user - let's expand each query
+    # so it exists with various fqn "part-ifications"
+    queries = expand(queries)
 
     with tempfile.NamedTemporaryFile(suffix=".pl", delete=False) as f:
         kb_filename = f.name
