@@ -12,13 +12,17 @@ app = Flask(__name__)
 
 EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
 
+# don't worry about the PROLOG_FILE - it's not user input
+# pylint: disable=subprocess-run-check
 def execute_query(prolog_filename: str) -> str:
     status = subprocess.run(
         EXECUTE_QUERY.format(PROLOG_FILE=prolog_filename),
         capture_output=True,
         shell=True
     )
-    return status.stdout.decode('utf-8')
+    stdout_response = status.stdout.decode('utf-8')
+    stderr_response = status.stderr.decode('utf-8')
+    return f'stdout=({stdout_response}), stderr=({stderr_response})'
 
 def variant1(bytes_query) -> Optional[str]:
     query = bytes_query.decode("utf-8")
@@ -36,7 +40,7 @@ def variant1(bytes_query) -> Optional[str]:
 
     return None
 
-def expand(queries: list[str]) -> list[str]:
+def expand(queries: list[bytes]) -> list[str]:
     expanded = []
     for query in queries:
         expanded.append(query.decode('utf-8'))
