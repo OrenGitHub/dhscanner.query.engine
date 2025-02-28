@@ -2,7 +2,7 @@ from flask import Flask
 from flask import request
 
 import re
-
+import json
 import tempfile
 import subprocess
 
@@ -20,6 +20,12 @@ def execute_query(prolog_filename: str) -> str:
         capture_output=True,
         shell=True
     )
+    stdout_response = status.stdout.decode('utf-8')
+    stderr_response = status.stderr.decode('utf-8')
+    return f'stdout=({stdout_response}), stderr=({stderr_response})'
+
+def execute_debug_query() -> str:
+    status = subprocess.run('swipl --version', capture_output=True, shell=True)
     stdout_response = status.stdout.decode('utf-8')
     stderr_response = status.stderr.decode('utf-8')
     return f'stdout=({stdout_response}), stderr=({stderr_response})'
@@ -59,6 +65,7 @@ def check():
 
     kb_fl = request.files['kb']
     queries_fl = request.files['queries']
+    debug = json.loads(request.form.get('debug', 'false'))
 
     kb = kb_fl.read()
     queries = queries_fl.readlines()
@@ -94,4 +101,8 @@ def check():
         f.write('    ).')
 
     result = execute_query(main_filename)
+
+    if debug:
+        result = execute_debug_query()
+
     return f'>>> {result}'
