@@ -90,7 +90,7 @@ def check():
         f.write('    queries(QueryList),\n')
         f.write('    forall(\n')
         f.write('        member(Query, QueryList),\n')
-        f.write('        (Query -> write(Query), write(\': yes\'), nl ; write(Query), write(\': no\'), nl)\n')
+        f.write('        (Query -> (write(Query), write(\': yes\'), nl)) ; (write(Query), write(\': no\'), nl)\n')
         f.write('    ).')
 
     result = execute_query(main_filename)
