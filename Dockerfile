@@ -1,4 +1,4 @@
-FROM swipl as backend
+FROM swipl:9.3.20 as backend
 RUN apt-get update
 RUN apt-get install vim -y
 RUN echo "set number" > ~/.vimrc
