@@ -24,11 +24,21 @@ def execute_query(prolog_filename: str) -> str:
     stderr_response = status.stderr.decode('utf-8')
     return f'stdout=({stdout_response}), stderr=({stderr_response})'
 
-def execute_debug_query() -> str:
+def execute_debug_query(prolog_filename: str) -> str:
+
     status = subprocess.run('swipl --version', capture_output=True, shell=True)
     stdout_response = status.stdout.decode('utf-8')
     stderr_response = status.stderr.decode('utf-8')
-    return f'stdout=({stdout_response}), stderr=({stderr_response})'
+
+    with open(prolog_filename) as fl:
+        content = fl.read()
+
+    return ','.join([
+        f'stdout=({stdout_response})',
+        f'stderr=({stderr_response})',
+        f'filename=({prolog_filename})',
+        f'content=({content})'
+    ])
 
 def variant1(bytes_query) -> Optional[str]:
     query = bytes_query.decode("utf-8")
@@ -103,6 +113,6 @@ def check():
     result = execute_query(main_filename)
 
     if debug:
-        result = execute_debug_query()
+        result = execute_debug_query(main_filename)
 
     return f'>>> {result}'
