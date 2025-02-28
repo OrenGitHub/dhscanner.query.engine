@@ -98,7 +98,7 @@ def check():
         f.write(':- [ \'/queryengine/utils\' ].\n\n')
         for i, query in enumerate(queries):
             query_with_path = query.replace(').', f', Path{i})).')
-            f.write(f'q{i}(Path{i}) :- ({query_with_path}')
+            f.write(f'q{i}(Path{i}) :- ({query_with_path}\n')
         f.write('\n\n')
         f.write('queries([\n')
         f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)]))
