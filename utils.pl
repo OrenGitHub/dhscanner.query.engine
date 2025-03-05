@@ -52,6 +52,11 @@ utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput) :-
     kb_callable_annotated_with(Calleble, 'fastapi.APIRouter.get'),
     kb_callable_has_param(Callable, UserInput).
 
+utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput) :-
+    kb_callable(Callable),
+    kb_callable_annotated_with(Calleble, 'fastapi.FastAPI.get'),
+    kb_callable_has_param(Callable, UserInput).
+
 utils_user_input_originated_from_composer_laravel_post_request_params(UserInput) :-
     utils_composer_laravel_post_handler(Call),
     kb_arg_for_call(Callback, Call),
