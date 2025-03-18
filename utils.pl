@@ -1,5 +1,10 @@
 :- style_check(-singleton).
 
+user_input_might_be_assigned_to(Fqn, Path) :-
+    kb_has_fqn(Target, Fqn),
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Target, Path).
+
 user_input_might_reach_function(Fqn, Path) :-
     kb_call(Call),
     kb_has_fqn(Call, Fqn),
@@ -19,7 +24,12 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_ruby_rails_post_
 utils_user_input(UserInput) :- utils_user_input_originated_from_php_wordpress_plugin_action(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_params(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_js_url_search_params(UserInput) :-
+    kb_has_fqn(UserInput, 'URLSearchParams.get'),
+    kb_call(UserInput).
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
     kb_has_fqn(Method, 'post'),
@@ -117,6 +127,11 @@ utils_dataflow_edge(Arg, Param) :-
     kb_has_fqn(Call, Fqn),
     kb_has_fqn(Callable, Fqn),
     kb_callable_has_param(Callable, Param).
+utils_dataflow_edge(Callable, Call) :-
+    kb_callable(Callable),
+    kb_call(Call),
+    kb_has_fqn(Callable, Fqn),
+    kb_has_fqn(Call, Fqn).
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
