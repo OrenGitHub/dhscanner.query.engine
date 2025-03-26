@@ -25,7 +25,12 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_php_wordpress_pl
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_gin_query_params(UserInput) :-
+    kb_has_fqn(UserInput, 'github.com/gin-gonic/gin.Context.Param'),
+    kb_call(UserInput).
 
 utils_user_input_originated_from_js_url_search_params(UserInput) :-
     kb_has_fqn(UserInput, 'URLSearchParams.get'),
@@ -143,4 +148,4 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
-utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,8,Path).
+utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,30,Path).
