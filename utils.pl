@@ -1,5 +1,36 @@
 :- style_check(-singleton).
 
+owasp_top_10(Path) :- injection(Path).
+% add more kinds here ...
+
+injection(Path) :- sqli(Path).
+% add more kinds here ...
+
+utils_no_dataflow_path(Src, Dst) :-
+    \+ utils_bounded_dataflow_path(Src, Dst, 3, _).
+
+utils_has_prepared_statement_fqn(PreparedStatement) :-
+    kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
+    % add more kinds here ...
+
+utils_prepared_statement(PreparedStatement) :-
+    kb_call(PreparedStatement),
+    utils_has_prepared_statement_fqn(PreparedStatement).
+
+sqli(Path) :-
+    utils_user_input(UserInput),
+    raw_sql_query(Call),
+    utils_bounded_dataflow_path(UserInput, Call, 2, Path),
+    utils_prepared_statement(PreparedStatement),
+    utils_no_dataflow_path(UserInput, PreparedStatement).
+
+raw_sql_query(Call) :-
+    raw_sql_fqn(Fqn),
+    kb_call(Call),
+    kb_has_fqn(Call, Fqn).
+
+raw_sql_fqn('github.com/layer5io/meshery/server/models.Provider.GetGenericPersister.Model.Preload.Where.Order').
+
 user_input_might_be_assigned_to(Fqn, Path) :-
     kb_has_fqn(Target, Fqn),
     utils_user_input(UserInput),
@@ -26,7 +57,12 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_fastapi_get_
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser_query_params(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
+    kb_has_fqn(UserInput, 'net/http.Request.URL.Query.Get'),
+    kb_call(UserInput).
 
 utils_user_input_originated_from_go_gin_query_params(UserInput) :-
     kb_has_fqn(UserInput, 'github.com/gin-gonic/gin.Context.Param'),
