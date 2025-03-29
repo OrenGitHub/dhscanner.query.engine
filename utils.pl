@@ -6,9 +6,6 @@ owasp_top_10(Path) :- injection(Path).
 injection(Path) :- sqli(Path).
 % add more kinds here ...
 
-utils_no_dataflow_path(Src, Dst) :-
-    \+ utils_bounded_dataflow_path(Src, Dst, 3, _).
-
 utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
     % add more kinds here ...
@@ -17,12 +14,16 @@ utils_prepared_statement(PreparedStatement) :-
     kb_call(PreparedStatement),
     utils_has_prepared_statement_fqn(PreparedStatement).
 
-sqli(Path) :-
+utils_shorter_prepared_statement_dataflow_path(Src, Dst, MaxLength) :-
+    utils_bounded_dataflow_path(Src, Dst, MaxLength, _).
+
+sqli(DangerousPath) :-
     utils_user_input(UserInput),
     raw_sql_query(Call),
-    utils_bounded_dataflow_path(UserInput, Call, 2, Path),
+    utils_bounded_dataflow_path(UserInput, Call, 5, DangerousPath),
+    length(DangerousPath, LengthDangerousPath),
     utils_prepared_statement(PreparedStatement),
-    utils_no_dataflow_path(UserInput, PreparedStatement).
+    \+ utils_shorter_prepared_statement_dataflow_path(UserInput, PreparedStatement, LengthDangerousPath).
 
 raw_sql_query(Call) :-
     raw_sql_fqn(Fqn),
