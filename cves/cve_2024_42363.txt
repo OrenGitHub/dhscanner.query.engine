@@ -1,1 +1,0 @@
-user_input_might_reach_function('YAML.load_stream')

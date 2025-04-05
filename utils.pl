@@ -1,5 +1,17 @@
 :- style_check(-singleton).
 
+problems(Path) :- owasp_top_10(Path).
+problems(Path) :- file_deletion(Path).
+% add more kinds here ...
+
+file_deletion(Path) :- file_deletion_golang(Path).
+
+file_deletion_golang(Path) :-
+    kb_has_fqn(Call, 'os.Remove'),
+    kb_call(Call),
+    utils_dataflow_path(UserInput, Call),
+    utils_user_input(UserInput).
+
 owasp_top_10(Path) :- injection(Path).
 % add more kinds here ...
 
@@ -59,7 +71,11 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser_query_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
+    kb_has_fqn(UserInput, 'net/http.Request.Body').
 
 utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
     kb_has_fqn(UserInput, 'net/http.Request.URL.Query.Get'),
@@ -174,6 +190,16 @@ utils_dataflow_edge(Callable, Call) :-
     kb_call(Call),
     kb_has_fqn(Callable, Fqn),
     kb_has_fqn(Call, Fqn).
+
+% theoretically, a tainted callee may taint its arguments.
+% this happens when the input argument is also the output.
+% It does NOT happen often though. For this reason, I
+% decided that this will happen based on the callee fqn
+% otherwise this will result in many false positives.
+utils_dataflow_edge(Callee, Arg) :-
+kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
+    kb_call(Call),
+    kb_arg_for_call(Arg, Call).
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
