@@ -74,7 +74,7 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
 % add more web frameworks here ...
 
-utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
+utils_user_input_originated_from_go_native_http_request_body(UserInput) :-
     kb_has_fqn(UserInput, 'net/http.Request.Body').
 
 utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
