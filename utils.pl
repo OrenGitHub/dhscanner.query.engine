@@ -196,8 +196,8 @@ utils_dataflow_edge(Callable, Call) :-
 % It does NOT happen often though. For this reason, I
 % decided that this will happen based on the callee fqn
 % otherwise this will result in many false positives.
-utils_dataflow_edge(Callee, Arg) :-
-kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
+utils_dataflow_edge(Call, Arg) :-
+    kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
     kb_call(Call),
     kb_arg_for_call(Arg, Call).
 
