@@ -8,9 +8,9 @@ file_deletion(Path) :- file_deletion_golang(Path).
 
 file_deletion_golang(Path) :-
     kb_has_fqn(Call, 'os.Remove'),
+    utils_user_input(UserInput),
     kb_call(Call),
-    utils_dataflow_path(UserInput, Call),
-    utils_user_input(UserInput).
+    utils_dataflow_path(UserInput, Call, Path).
 
 owasp_top_10(Path) :- injection(Path).
 % add more kinds here ...

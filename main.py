@@ -98,8 +98,8 @@ def check():
         f.write(':- [ \'/queryengine/utils\' ].\n\n')
         for i, query in enumerate(queries):
             query_with_path = query.replace(').', f', Path{i})).')
-            if 'owasp_top_10' in query:
-                f.write(f'q{i}(Path{i}) :- owasp_top_10(Path{i}).')
+            if 'problems' in query:
+                f.write(f'q{i}(Path{i}) :- problems(Path{i}).')
             else:
                 f.write(f'q{i}(Path{i}) :- ({query_with_path}\n')
         f.write('\n\n')
