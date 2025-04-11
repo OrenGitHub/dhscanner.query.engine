@@ -2,7 +2,21 @@
 
 problems(Path) :- owasp_top_10(Path).
 problems(Path) :- file_deletion(Path).
+problems(Path) :- unsafe_deserialization(Path).
 % add more kinds here ...
+
+unsafe_deserialization(Path) :-
+    utils_user_input(UserInput),
+    unsafe_deserialization_call(Call),
+    utils_dataflow_path(UserInput, Call, Path).
+
+
+unsafe_deserialization_call(Call) :- unsafe_deserialization_call_ruby(Call).
+% add more kinds here ...
+
+unsafe_deserialization_call_ruby(Call) :-
+    kb_has_fqn(Call, 'YAML.load_stream'),
+    kb_call(Call).
 
 file_deletion(Path) :- file_deletion_golang(Path).
 
@@ -152,8 +166,12 @@ utils_user_input_originated_from_ruby_rails_post_request_params(UserInput) :-
     kb_method_of_class(Method, Class).
 
 utils_ruby_rails_class_controller(Class) :-
-    utils_subclass_of(Class, Super),
-    kb_class_name(Super, 'ApplicationController' ).
+    kb_subclass_of(Class, 'ApplicationController' ).
+
+utils_ruby_rails_class_controller(Class) :-
+    kb_subclass_of(Super, 'ApplicationController' ),
+    kb_class_name(Super, Name),
+    kb_subclass_of(Class, Name).
 
 utils_composer_laravel_post_handler(Call) :-
     kb_call(Call),
