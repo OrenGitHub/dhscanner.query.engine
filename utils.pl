@@ -3,13 +3,18 @@
 problems(Path) :- owasp_top_10(Path).
 problems(Path) :- file_deletion(Path).
 problems(Path) :- unsafe_deserialization(Path).
+problems(Path) :- arbitrary_file_read(Path).
 % add more kinds here ...
+
+arbitrary_file_read(Path) :-
+    utils_user_input(UserInput),
+    kb_has_fqn(Call, 'flask.send_file'),
+    utils_dataflow_path(UserInput, Call, Path).
 
 unsafe_deserialization(Path) :-
     utils_user_input(UserInput),
     unsafe_deserialization_call(Call),
     utils_dataflow_path(UserInput, Call, Path).
-
 
 unsafe_deserialization_call(Call) :- unsafe_deserialization_call_ruby(Call).
 % add more kinds here ...
@@ -86,7 +91,14 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_pa
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_pip_flask_route_param(UserInput) :-
+    kb_callable_annotated_with(Callable, 'flask.Blueprint.route'),
+    kb_callable_annotated_with_user_input_inside_route(Callable, RouteParam),
+    kb_callable_has_param(Callable, UserInput),
+    kb_param_has_name(UserInput, RouteParam).
 
 utils_user_input_originated_from_go_native_http_request_body(UserInput) :-
     kb_has_fqn(UserInput, 'net/http.Request.Body').
