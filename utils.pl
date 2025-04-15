@@ -242,3 +242,7 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
 utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,30,Path).
+
+% dummy facts to silence "unknown procedure" errors
+kb_callable_annotated_with(not_a_real_callable, 'not.a.real.fqn').
+kb_callable_annotated_with_user_input_inside_route(not_a_real_callable, 'not_a_real_param_name').
