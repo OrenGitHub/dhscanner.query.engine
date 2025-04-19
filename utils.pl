@@ -34,8 +34,20 @@ file_deletion_golang(Path) :-
 owasp_top_10(Path) :- injection(Path).
 % add more kinds here ...
 
+injection(Path) :- rce(Path).
 injection(Path) :- sqli(Path).
 % add more kinds here ...
+
+rce(Path) :-
+    utils_user_input(UserInput),
+    utils_cmd_exec(Call),
+    utils_dataflow_path(UserInput, Call, Path).
+
+utils_cmd_exec(Call) :- utils_cmd_exec_go(Call).
+
+utils_cmd_exec_go(Call) :-
+    kb_has_fqn(Call, 'os/exec.CommandContext'),
+    kb_call(Call).
 
 utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
@@ -91,8 +103,20 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_pa
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_native_http_request_handler(UserInput) :-
+    kb_has_fqn(Call, 'net/http.HandleFunc'),
+    kb_arg_for_call(Route, Call),
+    kb_const_string(Route, _),
+    kb_arg_for_call(Lambda, Call),
+    kb_callable(Lambda),
+    kb_callable_has_param(Lambda, Response),
+    kb_param_has_type(Response, 'net/http.ResponseWriter'),
+    kb_callable_has_param(Lambda, UserInput),
+    kb_param_has_type(UserInput, 'net/http.Request').
 
 utils_user_input_originated_from_pip_flask_route_param(UserInput) :-
     kb_callable_annotated_with(Callable, 'flask.Blueprint.route'),
@@ -221,15 +245,15 @@ utils_dataflow_edge(Callable, Call) :-
     kb_has_fqn(Callable, Fqn),
     kb_has_fqn(Call, Fqn).
 
-% theoretically, a tainted callee may taint its arguments.
-% this happens when the input argument is also the output.
-% It does NOT happen often though. For this reason, I
-% decided that this will happen based on the callee fqn
-% otherwise this will result in many false positives.
 utils_dataflow_edge(Call, Arg) :-
     kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
     kb_call(Call),
     kb_arg_for_call(Arg, Call).
+
+utils_dataflow_edge(ArgIn, ArgOut) :-
+    kb_has_fqn(Call, 'encoding/json.Unmarshal'),
+    kb_arg_for_call(ArgIn, Call),
+    kb_arg_for_call(ArgOut, Call).
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
