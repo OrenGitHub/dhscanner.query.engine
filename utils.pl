@@ -265,4 +265,4 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
-utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,30,Path).
+utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,10,Path).
