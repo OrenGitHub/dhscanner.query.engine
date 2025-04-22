@@ -4,7 +4,13 @@ problems(Path) :- owasp_top_10(Path).
 problems(Path) :- file_deletion(Path).
 problems(Path) :- unsafe_deserialization(Path).
 problems(Path) :- arbitrary_file_read(Path).
+problems(Path) :- open_redirect(Path).
 % add more kinds here ...
+
+open_redirect(Path) :-
+    kb_has_fqn(Target, 'window'),
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Target, Path).
 
 arbitrary_file_read(Path) :-
     utils_user_input(UserInput),
@@ -105,6 +111,7 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_location(UserInput).
 % add more web frameworks here ...
 
 utils_user_input_originated_from_go_native_http_request_handler(UserInput) :-
@@ -117,6 +124,10 @@ utils_user_input_originated_from_go_native_http_request_handler(UserInput) :-
     kb_param_has_type(Response, 'net/http.ResponseWriter'),
     kb_callable_has_param(Lambda, UserInput),
     kb_param_has_type(UserInput, 'net/http.Request').
+
+utils_user_input_originated_from_js_react_location(UserInput) :-
+    kb_has_fqn(UserInput, 'react-router-dom.useLocation'),
+    kb_call(UserInput).
 
 utils_user_input_originated_from_pip_flask_route_param(UserInput) :-
     kb_callable_annotated_with(Callable, 'flask.Blueprint.route'),
