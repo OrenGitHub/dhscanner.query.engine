@@ -12,6 +12,14 @@ open_redirect(Path) :-
     utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Target, Path).
 
+open_redirect(Path) :-
+    utils_subclass_of(Class, 'tornado.web.RequestHandler'),
+    kb_has_fqn_parts(Call, 1, 'redirect'),
+    kb_has_fqn_parts(Call, 0, ClassFqn),
+    kb_class_name(Class, ClassFqn),
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Call, Path).
+
 arbitrary_file_read(Path) :-
     utils_user_input(UserInput),
     kb_has_fqn(Call, 'flask.send_file'),
@@ -151,14 +159,14 @@ utils_user_input_originated_from_js_url_search_params(UserInput) :-
     kb_call(UserInput).
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
-    kb_has_fqn(Method, 'post'),
-    kb_has_fqn_parts(Call, 0, ClassFqn),
+    utils_subclass_of(Class, 'tornado.web.RequestHandler'),
     kb_has_fqn_parts(Call, 1, 'get_query_argument'),
-    kb_class_name(Class, ClassFqn),
+    kb_has_fqn_parts(Call, 0, ClassFqn),
+    kb_has_fqn(Method, 'post'),
     kb_called_from_method(Call, Method),
-    kb_call(Call),
+    kb_class_name(Class, ClassFqn),
     kb_method_of_class(Method, Class),
-    utils_subclass_of(Class, 'tornado.web.RequestHandler').
+    kb_call(UserInput).
 
 % note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
 % example: (CVE-2024-7856)
@@ -232,15 +240,16 @@ utils_pip_gradio_button_click(Call) :-
     kb_call(Call),
     kb_has_fqn(Call, 'gradio.Button.click').
 
-utils_bounded_subclass_of(Subclass,Super,N) :-
+utils_bounded_subclass_of(Class,SuperFqn,N) :-
     N >= 1,
-    kb_subclass_of(Subclass,Super).
+    kb_subclass_of(Class,SuperFqn).
 
-utils_bounded_subclass_of(Subclass,Super,N) :-
+utils_bounded_subclass_of(Subclass,SuperFqn,N) :-
     N >= 2,
-    kb_subclass_of(Subclass,Class),
+    kb_subclass_of(Subclass,ClassFqn),
+    kb_class_name(Class, ClassFqn),
     N_MINUS_1 is N - 1,
-    utils_bounded_subclass_of(Class,Super,N_MINUS_1).
+    utils_bounded_subclass_of(Class,SuperFqn,N_MINUS_1).
 
 utils_subclass_of(Subclass,Super) :- utils_bounded_subclass_of(Subclass,Super,2).
 
