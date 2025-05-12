@@ -46,11 +46,21 @@ file_deletion_golang(Path) :-
     utils_dataflow_path(UserInput, Call, Path).
 
 owasp_top_10(Path) :- injection(Path).
+owasp_top_10(Path) :- ssrf(Path).
 % add more kinds here ...
 
 injection(Path) :- rce(Path).
 injection(Path) :- sqli(Path).
 % add more kinds here ...
+
+ssrf(Path) :-
+    utils_user_input(UserInput),
+    utils_http_request(Call),
+    utils_dataflow_path(UserInput, Call, Path).
+
+utils_http_request(Call) :-
+    kb_has_fqn(Call, 'requests.post'),
+    kb_call(Call).
 
 rce(Path) :-
     utils_user_input(UserInput),
@@ -120,7 +130,13 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_r
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_location(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_pip_django_views(UserInput) :-
+    kb_callable_annotated_with(Callable, 'django.views.decorators.http.require_http_methods'),
+    kb_param_has_name(UserInput, 'request'),
+    kb_callable_has_param(Callable, UserInput).
 
 utils_user_input_originated_from_go_native_http_request_handler(UserInput) :-
     kb_has_fqn(Call, 'net/http.HandleFunc'),

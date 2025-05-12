@@ -94,6 +94,7 @@ def check():
         main_filename = f.name
         f.write(':- style_check(-singleton).\n')
         f.write(':- discontiguous kb_class_name/2.\n')
+        f.write(':- discontiguous kb_subclass_of/2.\n')
         f.write(':- discontiguous kb_callable_annotated_with/2.\n')
         f.write(':- discontiguous kb_callable_annotated_with_user_input_inside_route/2.\n\n')
         f.write(f':- [ \'{kb_filename}\' ].\n')
