@@ -84,20 +84,17 @@ utils_prepared_statement(PreparedStatement) :-
 utils_shorter_prepared_statement_dataflow_path(Src, Dst, MaxLength) :-
     utils_bounded_dataflow_path(Src, Dst, MaxLength, _).
 
-sqli(DangerousPath) :-
-    utils_user_input(UserInput),
-    raw_sql_query(Call),
-    utils_bounded_dataflow_path(UserInput, Call, 5, DangerousPath),
-    length(DangerousPath, LengthDangerousPath),
-    utils_prepared_statement(PreparedStatement),
-    \+ utils_shorter_prepared_statement_dataflow_path(UserInput, PreparedStatement, LengthDangerousPath).
+sqli(Path) :- sqli_php(Path).
+% add more kinds here ...
 
-raw_sql_query(Call) :-
-    raw_sql_fqn(Fqn),
+sqli_php(Path) :- sqli_php_yii(Path).
+% add more kinds here ...
+
+sqli_php_yii(Path) :-
+    kb_has_fqn(Call, 'Yii.app.db.createCommand.queryAll'),
     kb_call(Call),
-    kb_has_fqn(Call, Fqn).
-
-raw_sql_fqn('github.com/layer5io/meshery/server/models.Provider.GetGenericPersister.Model.Preload.Where.Order').
+    utils_user_input(UserInput),
+    utils_dataflow_path(UserInput, Call, Path).
 
 user_input_might_be_assigned_to(Fqn, Path) :-
     kb_has_fqn(Target, Fqn),
@@ -131,7 +128,12 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_r
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_location(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_php_yii_query_params(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_php_yii_query_params(UserInput) :-
+    kb_has_fqn(UserInput, 'Yii.app.getRequest.getQueryParam'),
+    kb_call(UserInput).
 
 utils_user_input_originated_from_pip_django_views(UserInput) :-
     kb_callable_annotated_with(Callable, 'django.views.decorators.http.require_http_methods'),
