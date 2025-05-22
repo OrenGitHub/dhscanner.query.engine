@@ -5,7 +5,32 @@ problems(Path) :- file_deletion(Path).
 problems(Path) :- unsafe_deserialization(Path).
 problems(Path) :- arbitrary_file_read(Path).
 problems(Path) :- open_redirect(Path).
+problems(Path) :- broken_access_control(Path).
 % add more kinds here ...
+
+broken_access_control(Path) :- broken_access_control_php_wordpress_plugin(Path).
+% add more kinds here ...
+
+wordpress_entrypoint_fqn(Call) :- kb_has_fqn(Call, 'add_action').
+wordpress_entrypoint_fqn(Call) :- kb_has_fqn(Call, 'add_submenu_page').
+
+wordpress_sink_fqn(Call) :- wordpress_sink_fqn_wp_trash_post(Call).
+
+wordpress_sink_fqn_wp_trash_post(Call) :-
+    kb_const_string(Callee, 'wp_trash_post'),
+    kb_has_fqn(Call, 'array_map'),
+    kb_arg_i_for_call(Callee, 0, Call).
+
+broken_access_control_php_wordpress_plugin(Path) :-
+    wordpress_entrypoint_fqn(Call),
+    wordpress_sink_fqn(Target),
+    kb_call(Call),
+    kb_arg_i_for_call(Arg, 5, Call),
+    kb_has_fqn(Arg, Fqn),
+    kb_callable(Callable),
+    kb_has_fqn(Callable, Fqn),
+    kb_call(Target),
+    utils_control_flow_no_csrf_check_path(Callable, Target, Path).
 
 open_redirect(Path) :-
     kb_has_fqn(Target, 'window'),
@@ -271,6 +296,52 @@ utils_bounded_subclass_of(Subclass,SuperFqn,N) :-
 
 utils_subclass_of(Subclass,Super) :- utils_bounded_subclass_of(Subclass,Super,2).
 
+utils_control_flow_no_csrf_check_path(Src, Dst, Path) :-
+    utils_bounded_control_flow_no_csrf_check_path(Src, Dst, 15, Path).
+
+utils_bounded_control_flow_no_csrf_check_path(Src, Dst, N, [(Src, Dst)]) :-
+    N >= 1,
+    utils_control_flow_no_csrf_check_edge(Src, Dst).
+
+utils_bounded_control_flow_no_csrf_check_path(Src, Dst, N, [(Src, Middle) | Path]) :-
+    N >= 2,
+    utils_control_flow_no_csrf_check_edge(Src, Middle),
+    N_MINUS_1 is N - 1,
+    utils_bounded_control_flow_no_csrf_check_path(Middle, Dst, N_MINUS_1, Path).
+
+utils_csrf_check(Call) :-
+    kb_has_fqn(Call, 'wp_verify_nonce'),
+    kb_const_string(Subscript, '_wpnonce'),
+    kb_has_fqn(Var, '_REQUEST'),
+    kb_arg_i_for_call(Arg, 0, Call),
+    kb_read_subscript(Arg, Var, Subscript).
+
+utils_control_flow_no_csrf_check_edge(U, V) :-
+    kb_control_flow_edge(U, V),
+    \+ utils_csrf_check(U),
+    \+ utils_csrf_check(V).
+
+utils_control_flow_no_csrf_check_edge(Call, Callee) :-
+    kb_has_fqn(Call, Fqn),
+    kb_has_fqn(Callee, Fqn),
+    kb_call(Call),
+    kb_callable(Callee).
+
+% wordpress dynamic construction of names:
+%
+%                           resolved  unknown
+%                              |---|  |-----|
+% call_user_func_array( array( $this, $method )
+%
+utils_control_flow_no_csrf_check_edge(FuncArray, Callee) :-
+    kb_has_fqn(FuncArray, 'call_user_func_array'),
+    kb_has_fqn(Call, 'arrayify'),
+    kb_arg_i_for_call(Call, 0, FuncArray),
+    kb_arg_i_for_call(This, 0, Call),
+    kb_has_fqn(This, Fqn),
+    kb_has_fqn_parts(Callee, 0, Fqn),
+    kb_callable(Callee).
+
 utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
 utils_dataflow_edge(Arg, Param) :-
     kb_arg_for_call(Arg, Call),
@@ -304,3 +375,4 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
 utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,10,Path).
+
