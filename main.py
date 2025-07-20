@@ -12,6 +12,25 @@ app = Flask(__name__)
 
 EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
 
+@app.route('/check', methods=['POST'])
+def check():
+
+    kb = request.form['kb']
+
+    with tempfile.NamedTemporaryFile(suffix=".pl", delete=False) as f:
+        kb_filename = f.name
+        f.write(kb.encode('utf-8'))
+
+    with open('template.pl', 'rt') as f:
+        content = f.read()
+
+    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
+        main_filename = f.name
+        f.write(content.format(KNOWLEDGE_BASE=kb_filename))
+
+    result = execute_query(main_filename)
+    return result
+
 # don't worry about the PROLOG_FILE - it's not user input
 # pylint: disable=subprocess-run-check
 def execute_query(prolog_filename: str) -> str:
@@ -24,101 +43,6 @@ def execute_query(prolog_filename: str) -> str:
     stderr_response = status.stderr.decode('utf-8')
     return f'stdout=({stdout_response}), stderr=({stderr_response})'
 
-def execute_debug_query(prolog_filename: str) -> str:
-
-    status = subprocess.run('swipl --version', capture_output=True, shell=True)
-    stdout_response = status.stdout.decode('utf-8')
-    stderr_response = status.stderr.decode('utf-8')
-
-    with open(prolog_filename) as fl:
-        content = fl.read()
-
-    return ','.join([
-        f'stdout=({stdout_response})',
-        f'stderr=({stderr_response})',
-        f'filename=({prolog_filename})',
-        f'content=({content})'
-    ])
-
-def variant1(bytes_query) -> Optional[str]:
-    query = bytes_query.decode("utf-8")
-    positions = [match.start() for match in re.finditer(r"'", query)]
-    if len(positions) == 2:
-        start = positions[0] + 1
-        end = positions[1]
-        fqn = query[start:end]
-        parts = fqn.split('.')
-        if len(parts) > 1:
-            part0 = '\'' + '.'.join(parts[:-1]) + '\''
-            part1 = '\'' + parts[-1] + '\''
-            new_query = f'user_input_might_reach_function_parts({part0}, {part1}).'
-            return new_query
-
-    return None
-
-def expand(queries: list[bytes]) -> list[str]:
-    expanded = []
-    for query in queries:
-        expanded.append(query.decode('utf-8'))
-        variant = variant1(query)
-        if variant is not None:
-            expanded.append(variant)
-
-    return expanded
-
 @app.route('/healthcheck', methods=['GET'])
 def healthcheck():
     return { 'healthy': True }
-
-@app.route('/check', methods=['POST'])
-def check():
-
-    kb_fl = request.files['kb']
-    queries_fl = request.files['queries']
-    debug = json.loads(request.form.get('debug', 'false'))
-
-    kb = kb_fl.read()
-    queries = queries_fl.readlines()
-
-    # until the query api improves,
-    # and finer grained fqn manipulations are
-    # enabled for the user - let's expand each query
-    # so it exists with various fqn "part-ifications"
-    queries = expand(queries)
-
-    with tempfile.NamedTemporaryFile(suffix=".pl", delete=False) as f:
-        kb_filename = f.name
-        f.write(kb)
-
-    with tempfile.NamedTemporaryFile(suffix=".pl", mode='w', delete=False) as f:
-        main_filename = f.name
-        f.write(':- style_check(-singleton).\n')
-        f.write(':- discontiguous kb_class_name/2.\n')
-        f.write(':- discontiguous kb_subclass_of/2.\n')
-        f.write(':- discontiguous kb_callable_annotated_with/2.\n')
-        f.write(':- discontiguous kb_callable_annotated_with_user_input_inside_route/2.\n\n')
-        f.write(f':- [ \'{kb_filename}\' ].\n')
-        f.write(':- [ \'/queryengine/utils\' ].\n\n')
-        for i, query in enumerate(queries):
-            query_with_path = query.replace(').', f', Path{i})).')
-            if 'problems' in query:
-                f.write(f'q{i}(Path{i}) :- problems(Path{i}).')
-            else:
-                f.write(f'q{i}(Path{i}) :- ({query_with_path}\n')
-        f.write('\n\n')
-        f.write('queries([\n')
-        f.write(',\n'.join([f'    q{i}(Path{i})' for i, _ in enumerate(queries)]))
-        f.write(']).\n\n')
-        f.write('main :-\n')
-        f.write('    queries(QueryList),\n')
-        f.write('    forall(\n')
-        f.write('        member(Query, QueryList),\n')
-        f.write('        (Query -> (write(Query), write(\': yes\'), nl)) ; (write(Query), write(\': no\'), nl)\n')
-        f.write('    ).')
-
-    result = execute_query(main_filename)
-
-    if debug:
-        result = execute_debug_query(main_filename)
-
-    return f'>>> {result}'
