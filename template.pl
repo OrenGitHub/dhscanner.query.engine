@@ -11,7 +11,7 @@
 q0(Path0) :- problems(Path0).
 
 queries([
-    qo(Path0)
+    q0(Path0)
 ]).
 
 main :-
