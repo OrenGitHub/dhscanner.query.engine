@@ -4,6 +4,7 @@ problems(Path) :- owasp_top_10(Path).
 problems(Path) :- file_deletion(Path).
 problems(Path) :- unsafe_deserialization(Path).
 problems(Path) :- arbitrary_file_read(Path).
+problems(Path) :- arbitrary_file_write(Path).
 problems(Path) :- open_redirect(Path).
 problems(Path) :- broken_access_control(Path).
 % add more kinds here ...
@@ -49,6 +50,12 @@ arbitrary_file_read(Path) :-
     utils_user_input(UserInput),
     kb_has_fqn(Call, 'flask.send_file'),
     utils_dataflow_path(UserInput, Call, Path).
+
+arbitrary_file_write(Path) :-
+    utils_user_input(UserInput),
+    kb_has_fqn(Call, 'fs/promises.writeFile'),
+    kb_arg_i_for_call(Arg, 0, Call),
+    utils_dataflow_path(UserInput, Arg, Path).
 
 unsafe_deserialization(Path) :-
     utils_user_input(UserInput),
@@ -154,7 +161,13 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_location(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_php_yii_query_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_nextjs_http_post_request_handler(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_nextjs_http_post_request_handler(Param) :-
+    kb_param_has_type(Param, 'next/server.NextRequest'),
+    kb_has_fqn(Callable, 'POST'),
+    kb_callable_has_param(Callable, Param).
 
 utils_user_input_originated_from_php_yii_query_params(UserInput) :-
     kb_has_fqn(UserInput, 'Yii.app.getRequest.getQueryParam'),
@@ -348,6 +361,11 @@ utils_dataflow_edge(Arg, Param) :-
     kb_has_fqn(Call, Fqn),
     kb_has_fqn(Callable, Fqn),
     kb_callable_has_param(Callable, Param).
+utils_dataflow_edge(Arg, Param) :-
+    kb_arg_for_call(Arg, Call),
+    kb_has_fqn_parts(Call, 0, FqnPart),
+    kb_has_fqn_parts(Callable, 0, FqnPart),
+    kb_callable_has_param(Callable, Param).
 utils_dataflow_edge(Callable, Call) :-
     kb_callable(Callable),
     kb_call(Call),
@@ -374,5 +392,4 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
-utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,10,Path).
-
+utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,15,Path).

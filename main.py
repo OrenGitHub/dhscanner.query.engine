@@ -15,7 +15,7 @@ EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
 @app.route('/check', methods=['POST'])
 def check():
 
-    kb = request.form['kb']
+    kb = request.files['kb'].read().decode('utf-8')
 
     with tempfile.NamedTemporaryFile(suffix=".pl", delete=False) as f:
         kb_filename = f.name
