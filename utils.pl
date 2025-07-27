@@ -105,6 +105,10 @@ utils_cmd_exec_go(Call) :-
     kb_has_fqn(Call, 'os/exec.CommandContext'),
     kb_call(Call).
 
+utils_cmd_exec_go(Call) :-
+    kb_has_fqn(Call, 'Middleware.Binary').
+    %kb_callable(Call.
+
 utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
     % add more kinds here ...
@@ -162,7 +166,23 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_locatio
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_php_yii_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_nextjs_http_post_request_handler(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_bone_negroni_http_request_handler(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_bone_negroni_http_request_handler(Param) :-
+    kb_has_fqn(RegisterRouteCall, 'github.com/go-zoo/bone.Mux.Put'),
+    kb_has_fqn(NegroniNew, 'github.com/codegangsta/negroni.New'),
+    kb_has_fqn(Handler, 'github.com/codegangsta/negroni.HandlerFunc'),
+    kb_param_has_type(Param, 'net/http.Request'),
+    kb_param_has_name(Param, 'req'),
+    kb_arg_i_for_call(Route, 0, RegisterRouteCall),
+    kb_arg_i_for_call(NegroniNew, 1, RegisterRouteCall),
+    kb_arg_i_for_call(Handler, 1, NegroniNew),
+    kb_arg_i_for_call(DispatchedCallee, 0, Handler),
+    kb_has_fqn(DispatchedCallee, Fqn),
+    kb_has_fqn(Callee, Fqn),
+    kb_callable_has_param(Callable, Param),
+    kb_const_string(Route, _).
 
 utils_user_input_originated_from_nextjs_http_post_request_handler(Param) :-
     kb_param_has_type(Param, 'next/server.NextRequest'),
@@ -356,21 +376,42 @@ utils_control_flow_no_csrf_check_edge(FuncArray, Callee) :-
     kb_callable(Callee).
 
 utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
+
 utils_dataflow_edge(Arg, Param) :-
     kb_arg_for_call(Arg, Call),
     kb_has_fqn(Call, Fqn),
     kb_has_fqn(Callable, Fqn),
     kb_callable_has_param(Callable, Param).
+
 utils_dataflow_edge(Arg, Param) :-
     kb_arg_for_call(Arg, Call),
-    kb_has_fqn_parts(Call, 0, FqnPart),
-    kb_has_fqn_parts(Callable, 0, FqnPart),
+    kb_last_fqn_part(Call, FqnPart),
+    kb_last_fqn_part(Callable, FqnPart),
     kb_callable_has_param(Callable, Param).
-utils_dataflow_edge(Callable, Call) :-
-    kb_callable(Callable),
+
+%utils_dataflow_edge(Call, Callable) :-
+%    kb_call(Call),
+%    kb_callable(Callable),
+%    kb_has_fqn(Call, Fqn),
+%    kb_has_fqn(Callable, Fqn).
+
+utils_dataflow_edge(Call, Callable) :-
     kb_call(Call),
-    kb_has_fqn(Callable, Fqn),
-    kb_has_fqn(Call, Fqn).
+    kb_callable(Callable),
+    kb_last_fqn_part(Call, FqnPart),
+    kb_last_fqn_part(Callable, FqnPart).
+
+utils_dataflow_edge(Method, InsideMethodCall) :-
+    kb_callable(Method),
+    kb_called_from(InsideMethodCall, Method),
+    kb_has_fqn_parts(Method, 0, FqnPart),
+    kb_has_fqn_parts(InsideMethodCall, 0, FqnPart).
+
+utils_dataflow_edge(Method, DataMember) :-
+    kb_callable(Method),
+    kb_var_in_method(DataMember, Method),
+    kb_has_fqn_parts(Method, 0, FqnPart),
+    kb_has_fqn_parts(DataMember, 0, FqnPart).
 
 utils_dataflow_edge(Call, Arg) :-
     kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
@@ -381,6 +422,27 @@ utils_dataflow_edge(ArgIn, ArgOut) :-
     kb_has_fqn(Call, 'encoding/json.Unmarshal'),
     kb_arg_for_call(ArgIn, Call),
     kb_arg_for_call(ArgOut, Call).
+
+utils_dataflow_edge(ArgIn, ArgOut) :-
+    kb_has_fqn(Unmarshal, 'encoding/json.Unmarshal'),
+    kb_called_from(Unmarshal, Callable),
+    kb_has_fqn(Ampersand, 'ampersand'),
+    kb_call(Ampersand),
+    kb_arg_i_for_call(ArgOut, 0, Ampersand),
+    kb_arg_for_call(ArgIn, Call),
+    kb_arg_for_call(Ampersand, Call),
+    kb_has_fqn_parts(Call, _, Fqn),
+    kb_has_fqn(Callable, Fqn),
+    ArgIn \= Ampersand.
+
+utils_dataflow_edge(Arg, Receiver) :-
+    kb_has_fqn(Receiver, 'ampersand'),
+    kb_has_fqn_parts(Call, 0, 'ampersand'),
+    kb_dataflow_edge(Receiver, Callee),
+    kb_dataflow_edge(Callee, Call),
+    kb_var_in_method(Receiver, Method),
+    kb_called_from(Call, Method),
+    kb_arg_for_call(Arg, Call).
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
