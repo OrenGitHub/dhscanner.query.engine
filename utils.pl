@@ -1,5 +1,7 @@
 :- style_check(-singleton).
 
+%problems(_) :- utils_user_input_originated_from_go_bone_negroni_http_request_handler(_).
+
 problems(Path) :- owasp_top_10(Path).
 problems(Path) :- file_deletion(Path).
 problems(Path) :- unsafe_deserialization(Path).
@@ -106,8 +108,8 @@ utils_cmd_exec_go(Call) :-
     kb_call(Call).
 
 utils_cmd_exec_go(Call) :-
-    kb_has_fqn(Call, 'Middleware.Binary').
-    %kb_callable(Call.
+    kb_has_fqn(Call, 'os/exec.Command'),
+    kb_call(Call).
 
 utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
@@ -159,8 +161,6 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_url_search_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_gin_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_parser_query_params(UserInput).
-utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_body(UserInput).
-utils_user_input(UserInput) :- utils_user_input_originated_from_go_native_http_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_flask_route_param(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_js_react_location(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views(UserInput).
@@ -181,8 +181,14 @@ utils_user_input_originated_from_go_bone_negroni_http_request_handler(Param) :-
     kb_arg_i_for_call(DispatchedCallee, 0, Handler),
     kb_has_fqn(DispatchedCallee, Fqn),
     kb_has_fqn(Callee, Fqn),
-    kb_callable_has_param(Callable, Param),
-    kb_const_string(Route, _).
+    kb_callable_has_param(Callee, Param),
+    kb_const_string(Route, _),
+    write('[DEBUG] Found Param: '), write(Param), nl.
+    %write('[DEBUG] Found Handler: '), write(Handler), nl,
+    %write('[DEBUG] Found Route: '), write(Route), nl,
+    %write('[DEBUG] Found DispatchedCallee: '), write(DispatchedCallee), nl,
+    %write('[DEBUG] Found Fqn: '), write(Fqn), nl,
+    %write('[DEBUG] Found Callee: '), write(Callee), nl.
 
 utils_user_input_originated_from_nextjs_http_post_request_handler(Param) :-
     kb_param_has_type(Param, 'next/server.NextRequest'),
@@ -389,17 +395,26 @@ utils_dataflow_edge(Arg, Param) :-
     kb_last_fqn_part(Callable, FqnPart),
     kb_callable_has_param(Callable, Param).
 
-%utils_dataflow_edge(Call, Callable) :-
-%    kb_call(Call),
-%    kb_callable(Callable),
-%    kb_has_fqn(Call, Fqn),
-%    kb_has_fqn(Callable, Fqn).
+utils_dataflow_edge(Arg, Receiver) :-
+    current_predicate(kb_var_in_method/2),
+    kb_has_fqn(Receiver, 'ampersand'),
+    kb_has_fqn_parts(Call, 0, 'ampersand'),
+    kb_var_in_method(Receiver, Method),
+    kb_called_from(Call, Method),
+    kb_arg_for_call(Arg, Call),
+    Arg \= Receiver.
 
 utils_dataflow_edge(Call, Callable) :-
     kb_call(Call),
     kb_callable(Callable),
-    kb_last_fqn_part(Call, FqnPart),
-    kb_last_fqn_part(Callable, FqnPart).
+    kb_last_fqn_part(Call, Fqn),
+    kb_has_fqn(Callable, Fqn).
+
+%utils_dataflow_edge(Call, Callable) :-
+%    kb_call(Call),
+%    kb_callable(Callable),
+%    kb_last_fqn_part(Call, FqnPart),
+%    kb_last_fqn_part(Callable, FqnPart).
 
 utils_dataflow_edge(Method, InsideMethodCall) :-
     kb_callable(Method),
@@ -408,6 +423,7 @@ utils_dataflow_edge(Method, InsideMethodCall) :-
     kb_has_fqn_parts(InsideMethodCall, 0, FqnPart).
 
 utils_dataflow_edge(Method, DataMember) :-
+    current_predicate(kb_var_in_method/2),
     kb_callable(Method),
     kb_var_in_method(DataMember, Method),
     kb_has_fqn_parts(Method, 0, FqnPart),
@@ -435,14 +451,14 @@ utils_dataflow_edge(ArgIn, ArgOut) :-
     kb_has_fqn(Callable, Fqn),
     ArgIn \= Ampersand.
 
-utils_dataflow_edge(Arg, Receiver) :-
-    kb_has_fqn(Receiver, 'ampersand'),
-    kb_has_fqn_parts(Call, 0, 'ampersand'),
-    kb_dataflow_edge(Receiver, Callee),
-    kb_dataflow_edge(Callee, Call),
-    kb_var_in_method(Receiver, Method),
-    kb_called_from(Call, Method),
-    kb_arg_for_call(Arg, Call).
+%utils_dataflow_edge(Arg, Receiver) :-
+%    kb_has_fqn(Receiver, 'ampersand'),
+%    kb_has_fqn_parts(Call, 0, 'ampersand'),
+%    kb_dataflow_edge(Receiver, Callee),
+%    kb_dataflow_edge(Callee, Call),
+%    kb_var_in_method(Receiver, Method),
+%    kb_called_from(Call, Method),
+%    kb_arg_for_call(Arg, Call).
 
 utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
     N >= 1,
