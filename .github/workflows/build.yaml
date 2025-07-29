@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: build docker image
+      run: docker build --tag queryengine --file Dockerfile .
+    - name: read and bump patch version
+      id: version
+      run: |
+        current=$(cat VERSION)
+        major=$(echo $current | cut -d. -f1)
+        minor=$(echo $current | cut -d. -f2)
+        patch=$(echo $current | cut -d. -f3)
+        new_patch=$((patch + 1))
+        new_version="$major.$minor.$new_patch"
+        echo "new_version=$new_version" >> $GITHUB_OUTPUT
+    - name: tag release image
+      run: docker tag queryengine ${{ secrets.DOCKERHUB_USERNAME }}/dhscanner-pyswipl:${{ steps.version.outputs.new_version }}-x64
+    - name: login to DockerHub
+      run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+    - name: push image to Dockerhub
+      run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/dhscanner-pyswipl:${{ steps.version.outputs.new_version }}-x64
+    - name: update VERSION file
+      run: echo "${{ steps.version.outputs.new_version }}" > VERSION
+    - name: commit version bump
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add VERSION
+        git commit -m ":arrow_up: Bump version: ${{ steps.version.outputs.new_version }}"
+        git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }} HEAD:main

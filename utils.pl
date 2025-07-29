@@ -1,51 +1,124 @@
 :- style_check(-singleton).
 
-%problems(_) :- utils_user_input_originated_from_go_bone_negroni_http_request_handler(_).
+problems(Path) :- find_intra_procedural_problems_first(Path), !. % 🛑 STOP if this worked !
+problems(Path) :- then_look_for_inter_procedural_prblems(Path).
 
-problems(Path) :- owasp_top_10(Path).
-problems(Path) :- file_deletion(Path).
-problems(Path) :- unsafe_deserialization(Path).
-problems(Path) :- arbitrary_file_read(Path).
-problems(Path) :- arbitrary_file_write(Path).
-problems(Path) :- open_redirect(Path).
-problems(Path) :- broken_access_control(Path).
+find_intra_procedural_problems_first(Path) :- owasp_top_10_intra(Path).
+find_intra_procedural_problems_first(Path) :- arbitrary_file_write_intra(Path).
+find_intra_procedural_problems_first(Path) :- arbitrary_file_read_intra(Path).
+find_intra_procedural_problems_first(Path) :- unsafe_deserialization_intra(Path).
+find_intra_procedural_problems_first(Path) :- arbitrary_file_deletion_intra(Path).
+find_intra_procedural_problems_first(Path) :- open_redirect_intra(Path).
 % add more kinds here ...
 
-broken_access_control(Path) :- broken_access_control_php_wordpress_plugin(Path).
+owasp_top_10_intra(Path) :- injection_intra(Path).
+owasp_top_10_intra(Path) :- ssrf_intra(Path).
 % add more kinds here ...
 
-wordpress_entrypoint_fqn(Call) :- kb_has_fqn(Call, 'add_action').
-wordpress_entrypoint_fqn(Call) :- kb_has_fqn(Call, 'add_submenu_page').
+injection_intra(Path) :- rce_intra(Path).
+injection_intra(Path) :- sqli_intra(Path).
+% add more kinds here ...
 
-wordpress_sink_fqn(Call) :- wordpress_sink_fqn_wp_trash_post(Call).
-
-wordpress_sink_fqn_wp_trash_post(Call) :-
-    kb_const_string(Callee, 'wp_trash_post'),
-    kb_has_fqn(Call, 'array_map'),
-    kb_arg_i_for_call(Callee, 0, Call).
-
-broken_access_control_php_wordpress_plugin(Path) :-
-    wordpress_entrypoint_fqn(Call),
-    wordpress_sink_fqn(Target),
-    kb_call(Call),
-    kb_arg_i_for_call(Arg, 5, Call),
-    kb_has_fqn(Arg, Fqn),
-    kb_callable(Callable),
-    kb_has_fqn(Callable, Fqn),
-    kb_call(Target),
-    utils_control_flow_no_csrf_check_path(Callable, Target, Path).
-
-open_redirect(Path) :-
-    kb_has_fqn(Target, 'window'),
+rce_intra(Path) :-
     utils_user_input(UserInput),
-    utils_dataflow_path(UserInput, Target, Path).
+    utils_cmd_exec(Call),
+    utils_intra_dataflow_path(UserInput, Call, Path).
+
+sqli_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_sqli(Call),
+    utils_intra_dataflow_path(UserInput, Call, Path).
+
+ssrf_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_ssrf(Call),
+    utils_intra_dataflow_path(UserInput, Call, Path).
+
+arbitrary_file_write_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_arbitrary_file_write(Arg),
+    utils_dataflow_path(UserInput, Arg, Path).
+
+arbitrary_file_read_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_arbitrary_file_read(Call),
+    utils_intra_dataflow_path(UserInput, Call, Path).
+
+unsafe_deserialization_intra(Path) :-
+    utils_user_input(UserInput),
+    unsafe_deserialization(Call),
+    utils_dataflow_path(UserInput, Call, Path).
+
+arbitrary_file_deletion_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_arbitrary_file_deletion(Call),
+    utils_dataflow_path(UserInput, Call, Path).
+
+open_redirect_intra(Path) :-
+    utils_user_input(UserInput),
+    utils_open_redirect(Call),
+    utils_intra_dataflow_path(UserInput, Call, Path).
+
+utils_cmd_exec(Call) :- utils_cmd_exec_go(Call).
+% add more kinds here ...
+
+utils_cmd_exec_go(Call) :- kb_has_fqn(Call, 'os/exec.CommandContext'), kb_call(Call).
+utils_cmd_exec_go(Call) :- kb_has_fqn(Call, 'os/exec.Command'),        kb_call(Call).
+% add more kinds here ...
+
+utils_sqli(Call) :- utils_sqli_php(Call).
+% add more kinds here ...
+
+utils_sqli_php(Call) :- kb_has_fqn(Call, 'Yii.app.db.createCommand.queryAll'), kb_call(Call).
+% add more kinds here ...
+
+utils_ssrf(Call) :- kb_has_fqn(Call, 'requests.post'), kb_call(Call).
+% add more kinds here ...
+
+utils_arbitrary_file_write(Arg) :- utils_arbitrary_file_write_nodejs(Arg).
+
+utils_arbitrary_file_write_nodejs(Arg) :-
+    kb_has_fqn(Call, 'fs/promises.writeFile'),
+    kb_arg_i_for_call(Arg, 0, Call).
+
+utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
+
+utils_arbitrary_file_read_nodejs(Call) :-
+    kb_has_fqn(Call, 'fs/promises.readFile'),
+    kb_call(Call).
+
+utils_arbitrary_file_deletion(Call) :- utils_arbitrary_file_deletion_go(Call).
+
+utils_arbitrary_file_deletion_go(Call) :-
+    kb_has_fqn(Call, 'os.Remove'),
+    kb_call(Call).
+
+unsafe_deserialization(Call) :- unsafe_deserialization_ruby(Call).
+% add more kinds here ...
+
+unsafe_deserialization_ruby(Call) :-
+    kb_has_fqn(Call, 'YAML.load_stream'),
+    kb_call(Call).
+
+utils_open_redirect(Call) :- utils_open_redirect_python(Call).
+% add more kinds here ...
+
+utils_open_redirect_python(Call) :-
+    utils_subclass_of(Class, 'tornado.web.RequestHandler'),
+    kb_has_fqn_parts(Call, 1, 'redirect'),
+    kb_has_fqn_parts(Call, 0, ClassFqn),
+    kb_class_name(Class, ClassFqn).
+% add more kinds here ...
+
+then_look_for_inter_procedural_prblems(Path) :- owasp_top_10(Path).
+% add more kinds here ...
 
 open_redirect(Path) :-
+    utils_user_input(UserInput),
     utils_subclass_of(Class, 'tornado.web.RequestHandler'),
     kb_has_fqn_parts(Call, 1, 'redirect'),
     kb_has_fqn_parts(Call, 0, ClassFqn),
     kb_class_name(Class, ClassFqn),
-    utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
 arbitrary_file_read(Path) :-
@@ -58,11 +131,6 @@ arbitrary_file_write(Path) :-
     kb_has_fqn(Call, 'fs/promises.writeFile'),
     kb_arg_i_for_call(Arg, 0, Call),
     utils_dataflow_path(UserInput, Arg, Path).
-
-unsafe_deserialization(Path) :-
-    utils_user_input(UserInput),
-    unsafe_deserialization_call(Call),
-    utils_dataflow_path(UserInput, Call, Path).
 
 unsafe_deserialization_call(Call) :- unsafe_deserialization_call_ruby(Call).
 % add more kinds here ...
@@ -80,7 +148,6 @@ file_deletion_golang(Path) :-
     utils_dataflow_path(UserInput, Call, Path).
 
 owasp_top_10(Path) :- injection(Path).
-owasp_top_10(Path) :- ssrf(Path).
 % add more kinds here ...
 
 injection(Path) :- rce(Path).
@@ -98,18 +165,7 @@ utils_http_request(Call) :-
 
 rce(Path) :-
     utils_user_input(UserInput),
-    utils_cmd_exec(Call),
     utils_dataflow_path(UserInput, Call, Path).
-
-utils_cmd_exec(Call) :- utils_cmd_exec_go(Call).
-
-utils_cmd_exec_go(Call) :-
-    kb_has_fqn(Call, 'os/exec.CommandContext'),
-    kb_call(Call).
-
-utils_cmd_exec_go(Call) :-
-    kb_has_fqn(Call, 'os/exec.Command'),
-    kb_call(Call).
 
 utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
@@ -243,12 +299,14 @@ utils_user_input_originated_from_js_url_search_params(UserInput) :-
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
     utils_subclass_of(Class, 'tornado.web.RequestHandler'),
     kb_has_fqn_parts(Call, 1, 'get_query_argument'),
-    kb_has_fqn_parts(Call, 0, ClassFqn),
+    kb_arg_i_for_call(QueryParamName, 0, Call),
+    kb_const_string(QueryParamName, QueryParamNameFqn),
     kb_has_fqn(Method, 'post'),
-    kb_called_from_method(Call, Method),
+    kb_called_from(Call, Method),
+    kb_has_fqn_parts(Call, 0, ClassFqn),
     kb_class_name(Class, ClassFqn),
     kb_method_of_class(Method, Class),
-    kb_call(UserInput).
+    kb_call(Call).
 
 % note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
 % example: (CVE-2024-7856)
@@ -333,7 +391,15 @@ utils_bounded_subclass_of(Subclass,SuperFqn,N) :-
     N_MINUS_1 is N - 1,
     utils_bounded_subclass_of(Class,SuperFqn,N_MINUS_1).
 
-utils_subclass_of(Subclass,Super) :- utils_bounded_subclass_of(Subclass,Super,2).
+%utils_subclass_of(Subclass,Super) :- utils_bounded_subclass_of(Subclass,Super,2).
+
+utils_subclass_of(Subclass, SuperFqn) :-
+    kb_subclass_of(Subclass, SuperFqn).
+
+utils_subclass_of(Subclass, SuperFqn) :-
+    kb_subclass_of(Class, SuperFqn),
+    kb_class_name(Class, ClassFqn),
+    kb_subclass_of(Subclass, ClassFqn).
 
 utils_control_flow_no_csrf_check_path(Src, Dst, Path) :-
     utils_bounded_control_flow_no_csrf_check_path(Src, Dst, 15, Path).
@@ -381,6 +447,35 @@ utils_control_flow_no_csrf_check_edge(FuncArray, Callee) :-
     kb_has_fqn_parts(Callee, 0, Fqn),
     kb_callable(Callee).
 
+%utils_bounded_intra_dataflow_path(A,C,N,[(A,C)]) :-
+%    N >= 1,
+%    kb_dataflow_edge(A,C).
+
+%utils_bounded_intra_dataflow_path(A,C,N,[(A,B) | Path]) :-
+%    N >= 2,
+%    kb_dataflow_edge(A,B),
+%    N_MINUS_1 is N - 1,
+%    utils_bounded_intra_dataflow_path(B,C,N_MINUS_1,Path).
+
+%utils_intra_dataflow_path(U,V,Path) :-
+%    utils_bounded_intra_dataflow_path(U,V,15,Path).
+
+utils_intra_dataflow_path(U,V,Path) :-
+    between(1,15,N),
+    utils_bounded_intra_dataflow_path(U,V,N,[U],Path),
+    !.
+
+utils_bounded_intra_dataflow_path(A,C,N,_,[(A, C)]) :-
+    N >= 1,
+    kb_dataflow_edge(A,C).
+
+utils_bounded_intra_dataflow_path(A,C,N,Visited,[(A,B)|Path]) :-
+    N >= 2,
+    kb_dataflow_edge(A,B),
+    \+ member(B,Visited),
+    N_MINUS_1 is N - 1,
+    utils_bounded_intra_dataflow_path(B,C,N_MINUS_1,[B|Visited],Path).
+
 utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
 
 utils_dataflow_edge(Arg, Param) :-
@@ -404,11 +499,11 @@ utils_dataflow_edge(Arg, Receiver) :-
     kb_arg_for_call(Arg, Call),
     Arg \= Receiver.
 
-utils_dataflow_edge(Call, Callable) :-
-    kb_call(Call),
-    kb_callable(Callable),
-    kb_last_fqn_part(Call, Fqn),
-    kb_has_fqn(Callable, Fqn).
+%utils_dataflow_edge(Call, Callable) :-
+%    kb_call(Call),
+%    kb_callable(Callable),
+%    kb_last_fqn_part(Call, Fqn),
+%    kb_has_fqn(Callable, Fqn).
 
 %utils_dataflow_edge(Call, Callable) :-
 %    kb_call(Call),
@@ -416,18 +511,18 @@ utils_dataflow_edge(Call, Callable) :-
 %    kb_last_fqn_part(Call, FqnPart),
 %    kb_last_fqn_part(Callable, FqnPart).
 
-utils_dataflow_edge(Method, InsideMethodCall) :-
-    kb_callable(Method),
-    kb_called_from(InsideMethodCall, Method),
-    kb_has_fqn_parts(Method, 0, FqnPart),
-    kb_has_fqn_parts(InsideMethodCall, 0, FqnPart).
+%utils_dataflow_edge(Method, InsideMethodCall) :-
+%    kb_callable(Method),
+%    kb_called_from(InsideMethodCall, Method),
+%    kb_has_fqn_parts(Method, 0, FqnPart),
+%    kb_has_fqn_parts(InsideMethodCall, 0, FqnPart).
 
-utils_dataflow_edge(Method, DataMember) :-
-    current_predicate(kb_var_in_method/2),
-    kb_callable(Method),
-    kb_var_in_method(DataMember, Method),
-    kb_has_fqn_parts(Method, 0, FqnPart),
-    kb_has_fqn_parts(DataMember, 0, FqnPart).
+%utils_dataflow_edge(Method, DataMember) :-
+%    current_predicate(kb_var_in_method/2),
+%    kb_callable(Method),
+%    kb_var_in_method(DataMember, Method),
+%    kb_has_fqn_parts(Method, 0, FqnPart),
+%    kb_has_fqn_parts(DataMember, 0, FqnPart).
 
 utils_dataflow_edge(Call, Arg) :-
     kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
