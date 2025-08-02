@@ -82,6 +82,12 @@ utils_arbitrary_file_write_nodejs(Arg) :-
     kb_arg_i_for_call(Arg, 0, Call).
 
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
+utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
+% add more kinds here ...
+
+utils_arbitrary_file_read_nodejs_sendFile(Call) :-
+    kb_has_fqn(Call, 'res.sendFile'),
+    kb_call(Call).
 
 utils_arbitrary_file_read_nodejs(Call) :-
     kb_has_fqn(Call, 'fs/promises.readFile'),
@@ -207,7 +213,6 @@ user_input_might_reach_function_parts(FqnPart0, FqnPart1, Path) :-
     utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
-utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_composer_laravel_post_request_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_gradio_button_click_dispatch(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_ruby_rails_post_request_params(UserInput).
@@ -223,7 +228,16 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_pip_django_views
 utils_user_input(UserInput) :- utils_user_input_originated_from_php_yii_query_params(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_nextjs_http_post_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_bone_negroni_http_request_handler(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_get_request_params(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_npm_express_get_request_params(Param) :-
+    kb_has_fqn(Handler, 'express.Router.route.get'),
+    kb_arg_i_for_call(DispatchedCallable, 0, Handler),
+    kb_callable_has_param(DispatchedCallable, Param),
+    kb_callable_has_param(DispatchedCallable, Response),
+    kb_param_has_name(Param, 'req'),
+    kb_param_has_name(Response, 'res').
 
 utils_user_input_originated_from_go_bone_negroni_http_request_handler(Param) :-
     kb_has_fqn(RegisterRouteCall, 'github.com/go-zoo/bone.Mux.Put'),
