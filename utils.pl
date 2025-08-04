@@ -47,12 +47,12 @@ arbitrary_file_read_intra(Path) :-
 unsafe_deserialization_intra(Path) :-
     utils_user_input(UserInput),
     unsafe_deserialization(Call),
-    utils_dataflow_path(UserInput, Call, Path).
+    utils_intra_dataflow_path(UserInput, Call, Path).
 
 arbitrary_file_deletion_intra(Path) :-
     utils_user_input(UserInput),
     utils_arbitrary_file_deletion(Call),
-    utils_dataflow_path(UserInput, Call, Path).
+    utils_intra_dataflow_path(UserInput, Call, Path).
 
 open_redirect_intra(Path) :-
     utils_user_input(UserInput),
@@ -153,7 +153,7 @@ file_deletion_golang(Path) :-
     kb_call(Call),
     utils_dataflow_path(UserInput, Call, Path).
 
-owasp_top_10(Path) :- injection(Path).
+owasp_top_10(Path) :- ssrf(Path).
 % add more kinds here ...
 
 injection(Path) :- rce(Path).
@@ -161,12 +161,15 @@ injection(Path) :- sqli(Path).
 % add more kinds here ...
 
 ssrf(Path) :-
-    utils_user_input(UserInput),
     utils_http_request(Call),
+    utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
-utils_http_request(Call) :-
-    kb_has_fqn(Call, 'requests.post'),
+utils_http_request(Call) :- utils_http_request_go(Call).
+% add more kinds here ...
+
+utils_http_request_go(Call) :-
+    kb_has_fqn(Call, 'net/http.Get'),
     kb_call(Call).
 
 rce(Path) :-
@@ -229,7 +232,16 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_php_yii_query_pa
 utils_user_input(UserInput) :- utils_user_input_originated_from_nextjs_http_post_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_go_bone_negroni_http_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_get_request_params(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_go_grpc_json_input(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_go_grpc_json_input(Param) :-
+    kb_param_has_name(Param, 'request'),
+    kb_has_fqn_parts(Param, 1, ClassFqn),
+    kb_method_of_class(Method, ClassFqn),
+    kb_callable_has_param(Method, JsonDeser),
+    kb_param_has_name(JsonDeser, 'json'),
+    kb_param_has_type(JsonDeser, 'json').
 
 utils_user_input_originated_from_npm_express_get_request_params(Param) :-
     kb_has_fqn(Handler, 'express.Router.route.get'),
@@ -504,14 +516,14 @@ utils_dataflow_edge(Arg, Param) :-
     kb_last_fqn_part(Callable, FqnPart),
     kb_callable_has_param(Callable, Param).
 
-utils_dataflow_edge(Arg, Receiver) :-
-    current_predicate(kb_var_in_method/2),
-    kb_has_fqn(Receiver, 'ampersand'),
-    kb_has_fqn_parts(Call, 0, 'ampersand'),
-    kb_var_in_method(Receiver, Method),
-    kb_called_from(Call, Method),
-    kb_arg_for_call(Arg, Call),
-    Arg \= Receiver.
+%utils_dataflow_edge(Arg, Receiver) :-
+%    current_predicate(kb_var_in_method/2),
+%    kb_has_fqn(Receiver, 'ampersand'),
+%    kb_has_fqn_parts(Call, 0, 'ampersand'),
+%    kb_var_in_method(Receiver, Method),
+%    kb_called_from(Call, Method),
+%    kb_arg_for_call(Arg, Call),
+%    Arg \= Receiver.
 
 %utils_dataflow_edge(Call, Callable) :-
 %    kb_call(Call),
@@ -538,27 +550,27 @@ utils_dataflow_edge(Arg, Receiver) :-
 %    kb_has_fqn_parts(Method, 0, FqnPart),
 %    kb_has_fqn_parts(DataMember, 0, FqnPart).
 
-utils_dataflow_edge(Call, Arg) :-
-    kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
-    kb_call(Call),
-    kb_arg_for_call(Arg, Call).
+%utils_dataflow_edge(Call, Arg) :-
+%    kb_has_fqn(Call, 'encoding/json.NewDecoder.Decode'),
+%    kb_call(Call),
+%    kb_arg_for_call(Arg, Call).
 
-utils_dataflow_edge(ArgIn, ArgOut) :-
-    kb_has_fqn(Call, 'encoding/json.Unmarshal'),
-    kb_arg_for_call(ArgIn, Call),
-    kb_arg_for_call(ArgOut, Call).
+%utils_dataflow_edge(ArgIn, ArgOut) :-
+%    kb_has_fqn(Call, 'encoding/json.Unmarshal'),
+%    kb_arg_for_call(ArgIn, Call),
+%    kb_arg_for_call(ArgOut, Call).
 
-utils_dataflow_edge(ArgIn, ArgOut) :-
-    kb_has_fqn(Unmarshal, 'encoding/json.Unmarshal'),
-    kb_called_from(Unmarshal, Callable),
-    kb_has_fqn(Ampersand, 'ampersand'),
-    kb_call(Ampersand),
-    kb_arg_i_for_call(ArgOut, 0, Ampersand),
-    kb_arg_for_call(ArgIn, Call),
-    kb_arg_for_call(Ampersand, Call),
-    kb_has_fqn_parts(Call, _, Fqn),
-    kb_has_fqn(Callable, Fqn),
-    ArgIn \= Ampersand.
+%utils_dataflow_edge(ArgIn, ArgOut) :-
+%    kb_has_fqn(Unmarshal, 'encoding/json.Unmarshal'),
+%    kb_called_from(Unmarshal, Callable),
+%    kb_has_fqn(Ampersand, 'ampersand'),
+%    kb_call(Ampersand),
+%    kb_arg_i_for_call(ArgOut, 0, Ampersand),
+%    kb_arg_for_call(ArgIn, Call),
+%    kb_arg_for_call(Ampersand, Call),
+%    kb_has_fqn_parts(Call, _, Fqn),
+%    kb_has_fqn(Callable, Fqn),
+%    ArgIn \= Ampersand.
 
 %utils_dataflow_edge(Arg, Receiver) :-
 %    kb_has_fqn(Receiver, 'ampersand'),
@@ -579,4 +591,4 @@ utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
 
-utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,15,Path).
+utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,10,Path).
