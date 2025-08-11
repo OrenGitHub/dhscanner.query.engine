@@ -1,16 +1,21 @@
 from flask import Flask
 from flask import request
 
-import re
-import json
+import os
+import signal
+import typing
 import tempfile
 import subprocess
 
-from typing import Final, Optional
-
 app = Flask(__name__)
 
-EXECUTE_QUERY: Final[str] = 'swipl --quiet -f {PROLOG_FILE} -g main -g halt'
+STDOUT_PART: typing.Final[int] = 0
+STDERR_PART: typing.Final[int] = 1
+
+QUERY_TIME_LIMIT_SECONDS: typing.Final[int] = 180
+
+def swipl_cmd(prolog_filename: str) -> list[str]:
+    return ['swipl', '--quiet', '-s', prolog_filename, '-g', 'main', '-t', 'halt']
 
 @app.route('/check', methods=['POST'])
 def check():
@@ -34,14 +39,20 @@ def check():
 # don't worry about the PROLOG_FILE - it's not user input
 # pylint: disable=subprocess-run-check
 def execute_query(prolog_filename: str) -> str:
-    status = subprocess.run(
-        EXECUTE_QUERY.format(PROLOG_FILE=prolog_filename),
-        capture_output=True,
-        shell=True
+    proc = subprocess.Popen(
+        swipl_cmd(prolog_filename),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True
     )
-    stdout_response = status.stdout.decode('utf-8')
-    stderr_response = status.stderr.decode('utf-8')
-    return f'stdout=({stdout_response}), stderr=({stderr_response})'
+    try:
+        response = proc.communicate(timeout=QUERY_TIME_LIMIT_SECONDS)
+        return f'stdout=({response[STDOUT_PART]}), stderr=({response[STDERR_PART]})'
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.communicate()
+        return 'stdout=(q0: no), stderr=()'
 
 @app.route('/healthcheck', methods=['GET'])
 def healthcheck():
