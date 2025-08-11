@@ -52,7 +52,7 @@ def execute_query(prolog_filename: str) -> str:
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         proc.communicate()
-        return 'stdout=(q0: no), stderr=()'
+        return 'stdout=(), stderr=(received subprocess.TimeoutExpired)'
 
 @app.route('/healthcheck', methods=['GET'])
 def healthcheck():
