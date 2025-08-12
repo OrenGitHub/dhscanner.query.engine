@@ -237,7 +237,7 @@ utils_user_input(UserInput) :- utils_user_input_originated_from_go_grpc_json_inp
 
 utils_user_input_originated_from_go_grpc_json_input(Param) :-
     kb_param_has_name(Param, 'request'),
-    kb_has_fqn_parts(Param, 1, ClassFqn),
+    kb_last_fqn_part(Param, ClassFqn),
     kb_method_of_class(Method, ClassFqn),
     kb_callable_has_param(Method, JsonDeser),
     kb_param_has_name(JsonDeser, 'json'),
