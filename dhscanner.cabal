@@ -27,6 +27,9 @@ executable queryengine
 
     import: ghc_options
 
+    hs-source-dirs:
+        src
+
     main-is: Main.hs
 
     build-depends:
