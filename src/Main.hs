@@ -23,11 +23,13 @@ import System.Log.FastLogger ( LogStr, toLogStr )
 import Network.Wai.Handler.Warp (run)
 import System.Directory (getTemporaryDirectory)
 import qualified Network.Wai.Middleware.RequestLogger as Wai
-import System.Process ( proc, readCreateProcessWithExitCode )
+import System.Process ( proc, createProcess, waitForProcess, ProcessHandle, CreateProcess(..), StdStream(..), terminateProcess )
+import System.Exit ( ExitCode(..) )
+import Control.Concurrent ( forkIO, threadDelay, killThread, ThreadId )
+import Control.Exception ( finally, evaluate )
+import Control.Monad ( join )
 import Data.Time ( UTCTime, defaultTimeLocale, parseTimeM, formatTime )
-import System.IO ( Handle, openTempFile, hPutStr, hClose )
-
-
+import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents )
 
 data Healthy = Healthy Bool deriving ( Generic )
 
@@ -113,14 +115,54 @@ swiplTimeLimitSeconds = 180
 swiplTimeLimitMicroseconds :: Int
 swiplTimeLimitMicroseconds = fromIntegral (swiplTimeLimitSeconds * 1000000)
 
-runSwipl :: FilePath -> IO (Stdout, Stderr)
-runSwipl mainFile = do
-  let args = ["--quiet", "-s", mainFile, "-g", "main", "-t", "halt"]
-  (_, out, err) <- readCreateProcessWithExitCode (proc "swipl" args) ""
-  pure (Stdout out, Stderr err)
+swiplArgs :: FilePath -> [ String ]
+swiplArgs path = ["--quiet", "-s", path, "-g", "main", "-t", "halt"]
+
+swiplProcessConfig :: FilePath -> CreateProcess
+swiplProcessConfig path = (proc "swipl" (swiplArgs path)) {
+    std_out = CreatePipe,
+    std_err = CreatePipe,
+    create_group = True
+}
+
+createSwiplProcess :: FilePath -> IO (Maybe (Handle, Handle, ProcessHandle))
+createSwiplProcess path = do
+    (mOut, mErr, _, ph) <- createProcess (swiplProcessConfig path)
+    pure (case (mOut, mErr) of { (Just out, Just err) -> Just (out, err, ph); _ -> Nothing })
+
+killSwiplProcess :: ProcessHandle -> IO ()
+killSwiplProcess ph = do { terminateProcess ph; threadDelay 1000000; terminateProcess ph }
+
+setupTimeoutKiller :: ProcessHandle -> IO ThreadId
+setupTimeoutKiller ph = forkIO (do { threadDelay swiplTimeLimitMicroseconds; killSwiplProcess ph })
+
+readProcessOutput' :: ExitCode -> String -> String -> Maybe (Stdout, Stderr)
+readProcessOutput' ExitSuccess out err = Just (Stdout out, Stderr err)
+readProcessOutput' _ _ _ = Nothing
+
+readProcessOutput :: Handle -> Handle -> ProcessHandle -> IO (Maybe (Stdout, Stderr))
+readProcessOutput hOut hErr ph = do
+    out <- hGetContents hOut
+    err <- hGetContents hErr
+    exitCode <- waitForProcess ph
+    out' <- evaluate (length out `seq` out)
+    err' <- evaluate (length err `seq` err)
+    pure (readProcessOutput' exitCode out' err')
+
+runProcessWithTimeout :: Handle -> Handle -> ProcessHandle -> IO (Maybe (Stdout, Stderr))
+runProcessWithTimeout hOut hErr ph = do
+    timeoutThread <- setupTimeoutKiller ph
+    mResult <- timeout swiplTimeLimitMicroseconds (readProcessOutput hOut hErr ph)
+        `finally` killThread timeoutThread
+    pure (join mResult)
+
+runSwiplWithTimeout' :: (Handle, Handle, ProcessHandle) -> IO (Maybe (Stdout, Stderr))
+runSwiplWithTimeout' (hOut, hErr, ph) = runProcessWithTimeout hOut hErr ph
 
 runSwiplWithTimeout :: FilePath -> IO (Maybe (Stdout, Stderr))
-runSwiplWithTimeout path = timeout swiplTimeLimitMicroseconds (runSwipl path)
+runSwiplWithTimeout path = do
+    mProcess <- createSwiplProcess path
+    case mProcess of { Just process -> runSwiplWithTimeout' process; _ -> pure Nothing }
 
 jsonify :: Maybe (Stdout, Stderr) -> QueryEngineResult
 jsonify (Just (Stdout o, Stderr e)) = QueryEngineResult { stdout = o, stderr = e }
