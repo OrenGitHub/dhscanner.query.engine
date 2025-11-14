@@ -18,7 +18,7 @@ import qualified Data.Text.IO as TIO
 import qualified Data.ByteString.Char8 as BS
 import qualified Network.Wai
 import qualified Network.Wai.Logger
-import qualified Network.HTTP.Types.Status
+import qualified Network.HTTP.Types.Status as NetworkHTTPTypes
 import System.Log.FastLogger ( LogStr, toLogStr )
 import Network.Wai.Handler.Warp (run)
 import System.Directory (getTemporaryDirectory)
@@ -51,7 +51,15 @@ postQuerycheckR :: Handler Value
 postQuerycheckR = do
     facts <- requireCheckJsonBody :: Handler [ Kbgen.Fact ]
     results <- liftIO (queryEngine facts)
-    returnJson results
+    postQuerycheck' results
+
+newtype Timeout = Timeout Bool deriving ( Show, Eq )
+
+receivedTimeout :: QueryEngineResult -> Timeout
+receivedTimeout = Timeout . receivedTimeout'
+
+receivedTimeout' :: QueryEngineResult -> Bool
+receivedTimeout' result = null (stdout result) && "timeout:" `List.isPrefixOf` stderr result
 
 data QueryEngineResult
    = QueryEngineResult
@@ -60,6 +68,19 @@ data QueryEngineResult
          stderr :: String
      }
      deriving (Show, Generic, ToJSON)
+
+postQuerycheck' :: QueryEngineResult -> Handler Value
+postQuerycheck' results = postQuerycheck'' (receivedTimeout results) results
+
+postQuerycheck'' :: Timeout -> QueryEngineResult -> Handler Value
+postQuerycheck'' (Timeout True) _ = returnGatewayTimeout504
+postQuerycheck'' (Timeout False) results = returnJson results
+
+returnGatewayTimeout504 :: Handler Value
+returnGatewayTimeout504 = returnBodylessHttpStatusCode NetworkHTTPTypes.gatewayTimeout504
+
+returnBodylessHttpStatusCode :: NetworkHTTPTypes.Status -> Handler Value
+returnBodylessHttpStatusCode status = sendWaiResponse (Network.Wai.responseBuilder status [] mempty)
 
 newtype Stdout = Stdout String deriving ( Show, Eq )
 newtype Stderr = Stderr String deriving ( Show, Eq )
@@ -175,14 +196,14 @@ dateFormatter' Nothing = "[00/00/0000 ( 00:00:00 )]"
 dateFormatter :: String -> String
 dateFormatter date = dateFormatter' (parseTimeM True defaultTimeLocale "%d/%b/%Y:%T %Z" date :: Maybe UTCTime)
 
-logify :: String -> Network.Wai.Request -> Network.HTTP.Types.Status.Status -> String
+logify :: String -> Network.Wai.Request -> NetworkHTTPTypes.Status -> String
 logify date req _status = let
     datePart = dateFormatter date
     method = BS.unpack (Network.Wai.requestMethod req)
     url = BS.unpack (Network.Wai.rawPathInfo req)
     in datePart ++ " [Info#(Wai)] " ++ method ++ " " ++ url ++ "\n"
 
-formatter :: Network.Wai.Logger.ZonedDate -> Network.Wai.Request -> Network.HTTP.Types.Status.Status -> Maybe Integer -> LogStr
+formatter :: Network.Wai.Logger.ZonedDate -> Network.Wai.Request -> NetworkHTTPTypes.Status -> Maybe Integer -> LogStr
 formatter date req status _responseSize = toLogStr (logify (BS.unpack date) req status)
 
 loggerSettings :: Wai.RequestLoggerSettings
