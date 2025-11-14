@@ -177,13 +177,12 @@ runProcessWithTimeout hOut hErr ph = do
     mResult <- timeout swiplTimeLimitMicroseconds processAction `finally` killThread timeoutThread
     pure (join mResult)
 
-runSwiplWithTimeout' :: (Handle, Handle, ProcessHandle) -> IO (Maybe (Stdout, Stderr))
-runSwiplWithTimeout' (hOut, hErr, ph) = runProcessWithTimeout hOut hErr ph
+runSwiplWithTimeout' :: Maybe (Handle, Handle, ProcessHandle) -> IO (Maybe (Stdout, Stderr))
+runSwiplWithTimeout' (Just (hOut, hErr, ph)) = runProcessWithTimeout hOut hErr ph
+runSwiplWithTimeout' _ = pure Nothing
 
 runSwiplWithTimeout :: FilePath -> IO (Maybe (Stdout, Stderr))
-runSwiplWithTimeout path = do
-    mProcess <- createSwiplProcess path
-    case mProcess of { Just process -> runSwiplWithTimeout' process; _ -> pure Nothing }
+runSwiplWithTimeout path = createSwiplProcess path >>= runSwiplWithTimeout'
 
 jsonify :: Maybe (Stdout, Stderr) -> QueryEngineResult
 jsonify (Just (Stdout o, Stderr e)) = QueryEngineResult { stdout = o, stderr = e }
