@@ -152,8 +152,8 @@ readProcessOutput hOut hErr ph = do
 runProcessWithTimeout :: Handle -> Handle -> ProcessHandle -> IO (Maybe (Stdout, Stderr))
 runProcessWithTimeout hOut hErr ph = do
     timeoutThread <- setupTimeoutKiller ph
-    mResult <- timeout swiplTimeLimitMicroseconds (readProcessOutput hOut hErr ph)
-        `finally` killThread timeoutThread
+    let processAction = readProcessOutput hOut hErr ph
+    mResult <- timeout swiplTimeLimitMicroseconds processAction `finally` killThread timeoutThread
     pure (join mResult)
 
 runSwiplWithTimeout' :: (Handle, Handle, ProcessHandle) -> IO (Maybe (Stdout, Stderr))
