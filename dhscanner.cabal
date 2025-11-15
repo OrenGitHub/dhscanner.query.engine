@@ -38,7 +38,7 @@ executable queryengine
         containers,
         dhscanner-ast >= 1.1.2,
         dhscanner-bitcode >= 1.0.10,
-        dhscanner-kbgen >= 1.0.7,
+        dhscanner-kbgen >= 1.0.8,
         yesod-core,
         http-types,
         fast-logger,
