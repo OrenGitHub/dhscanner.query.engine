@@ -124,7 +124,7 @@ writeFactsToTempFile facts = do
 
 writeFactsToFileHandle :: [Kbgen.Fact] -> FilePath -> Handle -> IO FilePath
 writeFactsToFileHandle facts filename handle = do
-    hPutStr handle (List.unlines (List.map show facts))
+    hPutStr handle (List.unlines (List.map prologify facts))
     hClose handle
     pure filename
 
