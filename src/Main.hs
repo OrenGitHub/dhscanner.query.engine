@@ -19,7 +19,8 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Network.Wai
 import qualified Network.Wai.Logger
 import qualified Network.HTTP.Types.Status as NetworkHTTPTypes
-import System.Log.FastLogger ( LogStr, toLogStr )
+import Yesod.Core.Types (Logger(..))
+import System.Log.FastLogger ( LogStr, toLogStr, newStdoutLoggerSet, newTimeCache, defaultBufSize )
 import Network.Wai.Handler.Warp (run)
 import System.Directory (getTemporaryDirectory)
 import qualified Network.Wai.Middleware.RequestLogger as Wai
@@ -30,8 +31,9 @@ import Control.Exception ( finally, evaluate )
 import Control.Monad ( join )
 import Data.Time ( UTCTime, defaultTimeLocale, parseTimeM, formatTime )
 import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents )
+import Data.Word ( Word64 )
 
-data Healthy = Healthy Bool deriving ( Generic )
+newtype Healthy = Healthy Bool deriving ( Generic )
 
 instance ToJSON Healthy where toJSON (Healthy status) = object [ "healthy" .= status ]
 
@@ -42,14 +44,36 @@ mkYesod "App" [parseRoutes|
 /healthcheck HealthcheckR GET
 |]
 
-instance Yesod App
+-- 64MB
+useIncreasedSizeLimit :: Word64
+useIncreasedSizeLimit = 64000000
+
+-- Shared time format for all logging
+customTimeFormat :: String
+customTimeFormat = "[%d/%m/%Y ( %H:%M:%S )]"
+
+customizedLogger :: IO Logger
+customizedLogger = do
+    _loggerSet <- newStdoutLoggerSet defaultBufSize
+    _formatter <- newTimeCache (BS.pack customTimeFormat)
+    return $ Logger _loggerSet _formatter
+
+instance Yesod App where
+    maximumContentLength _thereIsOnly1AppHere (Just QuerycheckR) = Just useIncreasedSizeLimit
+    maximumContentLength _thereIsOnly1AppHere _ = Nothing
+    makeLogger _thereIsOnly1AppHere = customizedLogger
 
 getHealthcheckR :: Handler Value
 getHealthcheckR = returnJson (Healthy True)
 
+logFactsInfo :: [ Kbgen.Fact ] -> Handler ()
+logFactsInfo facts = do
+    $logInfo $ T.pack ("Num facts received: " ++ show (length facts))
+
 postQuerycheckR :: Handler Value
 postQuerycheckR = do
     facts <- requireCheckJsonBody :: Handler [ Kbgen.Fact ]
+    logFactsInfo facts
     results <- liftIO (queryEngine facts)
     postQuerycheck' results
 
@@ -188,8 +212,8 @@ jsonify :: Maybe (Stdout, Stderr) -> QueryEngineResult
 jsonify (Just (Stdout o, Stderr e)) = QueryEngineResult { stdout = o, stderr = e }
 jsonify Nothing = QueryEngineResult { stdout = "", stderr = "timeout: " ++ (show swiplTimeLimitSeconds) }
 
-dateFormatter' :: Maybe UTCTime -> String 
-dateFormatter' (Just t) = formatTime defaultTimeLocale "[%d/%m/%Y ( %H:%M:%S )]" t
+dateFormatter' :: Maybe UTCTime -> String
+dateFormatter' (Just t) = formatTime defaultTimeLocale customTimeFormat t
 dateFormatter' Nothing = "[00/00/0000 ( 00:00:00 )]"
 
 dateFormatter :: String -> String
