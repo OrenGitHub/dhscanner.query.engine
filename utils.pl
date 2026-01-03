@@ -62,17 +62,17 @@ open_redirect_intra(Path) :-
 utils_cmd_exec(Call) :- utils_cmd_exec_go(Call).
 % add more kinds here ...
 
-utils_cmd_exec_go(Call) :- kb_has_fqn(Call, 'os/exec.CommandContext'), kb_call(Call).
-utils_cmd_exec_go(Call) :- kb_has_fqn(Call, 'os/exec.Command'),        kb_call(Call).
+utils_cmd_exec_go(Call) :- kb_call_resolved(Call, 'os/exec.CommandContext').
+utils_cmd_exec_go(Call) :- kb_call_resolved(Call, 'os/exec.Command').
 % add more kinds here ...
 
 utils_sqli(Call) :- utils_sqli_php(Call).
 % add more kinds here ...
 
-utils_sqli_php(Call) :- kb_has_fqn(Call, 'Yii.app.db.createCommand.queryAll'), kb_call(Call).
+utils_sqli_php(Call) :- kb_call_resolved(Call, 'Yii.app.db.createCommand.queryAll').
 % add more kinds here ...
 
-utils_ssrf(Call) :- kb_has_fqn(Call, 'requests.post'), kb_call(Call).
+utils_ssrf(Call) :- kb_call_resolved(Call, 'requests.post').
 % add more kinds here ...
 
 utils_arbitrary_file_write(Arg) :- utils_arbitrary_file_write_nodejs(Arg).
@@ -86,25 +86,21 @@ utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Cal
 % add more kinds here ...
 
 utils_arbitrary_file_read_nodejs_sendFile(Call) :-
-    kb_has_fqn(Call, 'res.sendFile'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'res.sendFile').
 
 utils_arbitrary_file_read_nodejs(Call) :-
-    kb_has_fqn(Call, 'fs/promises.readFile'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'fs/promises.readFile').
 
 utils_arbitrary_file_deletion(Call) :- utils_arbitrary_file_deletion_go(Call).
 
 utils_arbitrary_file_deletion_go(Call) :-
-    kb_has_fqn(Call, 'os.Remove'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'os.Remove').
 
 unsafe_deserialization(Call) :- unsafe_deserialization_ruby(Call).
 % add more kinds here ...
 
 unsafe_deserialization_ruby(Call) :-
-    kb_has_fqn(Call, 'YAML.load_stream'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'YAML.load_stream').
 
 utils_open_redirect(Call) :- utils_open_redirect_python(Call).
 % add more kinds here ...
@@ -142,15 +138,13 @@ unsafe_deserialization_call(Call) :- unsafe_deserialization_call_ruby(Call).
 % add more kinds here ...
 
 unsafe_deserialization_call_ruby(Call) :-
-    kb_has_fqn(Call, 'YAML.load_stream'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'YAML.load_stream').
 
 file_deletion(Path) :- file_deletion_golang(Path).
 
 file_deletion_golang(Path) :-
-    kb_has_fqn(Call, 'os.Remove'),
+    kb_call_resolved(Call, 'os.Remove'),
     utils_user_input(UserInput),
-    kb_call(Call),
     utils_dataflow_path(UserInput, Call, Path).
 
 owasp_top_10(Path) :- ssrf(Path).
@@ -169,8 +163,7 @@ utils_http_request(Call) :- utils_http_request_go(Call).
 % add more kinds here ...
 
 utils_http_request_go(Call) :-
-    kb_has_fqn(Call, 'net/http.Get'),
-    kb_call(Call).
+    kb_call_resolved(Call, 'net/http.Get').
 
 rce(Path) :-
     utils_user_input(UserInput),
@@ -180,13 +173,6 @@ utils_has_prepared_statement_fqn(PreparedStatement) :-
     kb_has_fqn(PreparedStatement, 'gorm.io/gorm/clause.OrderByColumn').
     % add more kinds here ...
 
-utils_prepared_statement(PreparedStatement) :-
-    kb_call(PreparedStatement),
-    utils_has_prepared_statement_fqn(PreparedStatement).
-
-utils_shorter_prepared_statement_dataflow_path(Src, Dst, MaxLength) :-
-    utils_bounded_dataflow_path(Src, Dst, MaxLength, _).
-
 sqli(Path) :- sqli_php(Path).
 % add more kinds here ...
 
@@ -194,8 +180,7 @@ sqli_php(Path) :- sqli_php_yii(Path).
 % add more kinds here ...
 
 sqli_php_yii(Path) :-
-    kb_has_fqn(Call, 'Yii.app.db.createCommand.queryAll'),
-    kb_call(Call),
+    kb_call_resolved(Call, 'Yii.app.db.createCommand.queryAll'),
     utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
@@ -205,14 +190,7 @@ user_input_might_be_assigned_to(Fqn, Path) :-
     utils_dataflow_path(UserInput, Target, Path).
 
 user_input_might_reach_function(Fqn, Path) :-
-    kb_call(Call),
-    kb_has_fqn(Call, Fqn),
-    utils_user_input(UserInput),
-    utils_dataflow_path(UserInput, Call, Path).
-
-user_input_might_reach_function_parts(FqnPart0, FqnPart1, Path) :-
-    kb_call(Call),
-    kb_has_fqn_parts(Call, 1, FqnPart1),
+    kb_call_resolved(Call, Fqn),
     utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
@@ -278,8 +256,7 @@ utils_user_input_originated_from_nextjs_http_post_request_handler(Param) :-
     kb_callable_has_param(Callable, Param).
 
 utils_user_input_originated_from_php_yii_query_params(UserInput) :-
-    kb_has_fqn(UserInput, 'Yii.app.getRequest.getQueryParam'),
-    kb_call(UserInput).
+    kb_call_resolved(UserInput, 'Yii.app.getRequest.getQueryParam').
 
 utils_user_input_originated_from_pip_django_views(UserInput) :-
     kb_callable_annotated_with(Callable, 'django.views.decorators.http.require_http_methods'),
@@ -298,8 +275,7 @@ utils_user_input_originated_from_go_native_http_request_handler(UserInput) :-
     kb_param_has_type(UserInput, 'net/http.Request').
 
 utils_user_input_originated_from_js_react_location(UserInput) :-
-    kb_has_fqn(UserInput, 'react-router-dom.useLocation'),
-    kb_call(UserInput).
+    kb_call_resolved(UserInput, 'react-router-dom.useLocation').
 
 utils_user_input_originated_from_pip_flask_route_param(UserInput) :-
     kb_callable_annotated_with(Callable, 'flask.Blueprint.route'),
@@ -311,39 +287,32 @@ utils_user_input_originated_from_go_native_http_request_body(UserInput) :-
     kb_has_fqn(UserInput, 'net/http.Request.Body').
 
 utils_user_input_originated_from_go_native_parser_query_params(UserInput) :-
-    kb_has_fqn(UserInput, 'net/http.Request.URL.Query.Get'),
-    kb_call(UserInput).
+    kb_call_resolved(UserInput, 'net/http.Request.URL.Query.Get').
 
 utils_user_input_originated_from_go_gin_query_params(UserInput) :-
-    kb_has_fqn(UserInput, 'github.com/gin-gonic/gin.Context.Param'),
-    kb_call(UserInput).
+    kb_call_resolved(UserInput, 'github.com/gin-gonic/gin.Context.Param').
 
 utils_user_input_originated_from_js_url_search_params(UserInput) :-
-    kb_has_fqn(UserInput, 'URLSearchParams.get'),
-    kb_call(UserInput).
+    kb_call_resolved(UserInput, 'URLSearchParams.get').
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
-    utils_subclass_of(Class, 'tornado.web.RequestHandler'),
-    kb_has_fqn_parts(Call, 1, 'get_query_argument'),
+    kb_call_method_of_super(Call, 'get_query_argument', 'tornado.web.RequestHandler'),
     kb_arg_i_for_call(QueryParamName, 0, Call),
-    kb_const_string(QueryParamName, QueryParamNameFqn),
+    kb_const_string(QueryParamName, _),
     kb_has_fqn(Method, 'post'),
     kb_called_from(Call, Method),
     kb_has_fqn_parts(Call, 0, ClassFqn),
     kb_class_name(Class, ClassFqn),
-    kb_method_of_class(Method, Class),
-    kb_call(Call).
+    kb_method_of_class(Method, Class).
 
 % note: array(some, 5, 'vars') modeled as: arrayify(some, 5, 'vars')
 % example: (CVE-2024-7856)
 % code: add_action('wp_ajax_removeTempFiles', array($this, 'removeTempFiles'));
 % method: --------------------------------------------------^^^^^^^^^^^^^^^
 utils_user_input_originated_from_php_wordpress_plugin_action(UserInput) :-
-    kb_call(WordpressAction),
-    kb_has_fqn(WordpressAction,'add_action'),
+    kb_call_resolved(WordpressAction,'add_action'),
     kb_arg_for_call(ConstArray,WordpressAction),
-    kb_call(ConstArray),
-    kb_has_fqn(ConstArray,'arrayify'),
+    kb_call_resolved(ConstArray,'arrayify'),
     kb_arg_for_call(Callback,ConstArray),
     kb_const_string(Callback,Fqn),
     kb_has_fqn(Method, Fqn),
@@ -395,16 +364,13 @@ utils_ruby_rails_class_controller(Class) :-
     kb_subclass_of(Class, Name).
 
 utils_composer_laravel_post_handler(Call) :-
-    kb_call(Call),
-    kb_has_fqn(Call, 'composer.Illuminate.Support.Facades.Route.post').
+    kb_call_resolved('composer.Illuminate.Support.Facades.Route.post').
 
 utils_npm_express_post_handler(Call) :-
-    kb_call(Call),
-    kb_has_fqn(Call, 'npm.express.post').
+    kb_call_resolved(Call, 'npm.express.post').
 
 utils_pip_gradio_button_click(Call) :-
-    kb_call(Call),
-    kb_has_fqn(Call, 'gradio.Button.click').
+    kb_call_resolved(Call, 'gradio.Button.click').
 
 utils_bounded_subclass_of(Class,SuperFqn,N) :-
     N >= 1,
@@ -451,12 +417,6 @@ utils_control_flow_no_csrf_check_edge(U, V) :-
     kb_control_flow_edge(U, V),
     \+ utils_csrf_check(U),
     \+ utils_csrf_check(V).
-
-utils_control_flow_no_csrf_check_edge(Call, Callee) :-
-    kb_has_fqn(Call, Fqn),
-    kb_has_fqn(Callee, Fqn),
-    kb_call(Call),
-    kb_callable(Callee).
 
 % wordpress dynamic construction of names:
 %
