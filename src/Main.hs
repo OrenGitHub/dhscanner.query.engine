@@ -17,19 +17,17 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.ByteString.Char8 as BS
 import qualified Network.Wai
-import qualified Network.Wai.Logger
 import qualified Network.HTTP.Types.Status as NetworkHTTPTypes
 import Yesod.Core.Types (Logger(..))
-import System.Log.FastLogger ( LogStr, toLogStr, newStdoutLoggerSet, newTimeCache, defaultBufSize )
+import System.Log.FastLogger ( LogStr, LoggerSet, toLogStr, newStdoutLoggerSet, newTimeCache, defaultBufSize, fromLogStr, pushLogStrLn )
 import Network.Wai.Handler.Warp (run)
 import System.Directory (getTemporaryDirectory)
-import qualified Network.Wai.Middleware.RequestLogger as Wai
 import System.Process ( proc, createProcess, waitForProcess, ProcessHandle, CreateProcess(..), StdStream(..), terminateProcess )
 import System.Exit ( ExitCode(..) )
 import Control.Concurrent ( forkIO, threadDelay, killThread, ThreadId )
 import Control.Exception ( finally, evaluate )
 import Control.Monad ( join )
-import Data.Time ( UTCTime, defaultTimeLocale, parseTimeM, formatTime )
+import Data.Time ( defaultTimeLocale, formatTime, getZonedTime )
 import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents )
 import Data.Word ( Word64 )
 
@@ -58,10 +56,45 @@ customizedLogger = do
     _formatter <- newTimeCache (BS.pack customTimeFormat)
     return $ Logger _loggerSet _formatter
 
+messageLoggerWithoutSource :: Logger -> loc -> T.Text -> LogLevel -> LogStr -> IO ()
+messageLoggerWithoutSource (Logger loggerSetValue _) _loc _source level =
+    messageLoggerWithoutSource' level loggerSetValue
+
+messageLoggerWithoutSource' :: LogLevel -> LoggerSet -> LogStr -> IO ()
+messageLoggerWithoutSource' LevelDebug = messageDebugLoggerWithoutSource
+messageLoggerWithoutSource' LevelInfo = messageInfoLoggerWithoutSource
+messageLoggerWithoutSource' LevelWarn = messageWarnLoggerWithoutSource
+messageLoggerWithoutSource' LevelError = messageErrorLoggerWithoutSource
+messageLoggerWithoutSource' (LevelOther other) = messageOtherLoggerWithoutSource (T.unpack other)
+
+messageDebugLoggerWithoutSource :: LoggerSet -> LogStr -> IO ()
+messageDebugLoggerWithoutSource = logWithoutSource "Info"
+
+messageInfoLoggerWithoutSource :: LoggerSet -> LogStr -> IO ()
+messageInfoLoggerWithoutSource = logWithoutSource "Info"
+
+messageWarnLoggerWithoutSource :: LoggerSet -> LogStr -> IO ()
+messageWarnLoggerWithoutSource = logWithoutSource "Warn"
+
+messageErrorLoggerWithoutSource :: LoggerSet -> LogStr -> IO ()
+messageErrorLoggerWithoutSource = logWithoutSource "Error"
+
+messageOtherLoggerWithoutSource :: String -> LoggerSet -> LogStr -> IO ()
+messageOtherLoggerWithoutSource level = logWithoutSource level
+
+logWithoutSource :: String -> LoggerSet -> LogStr -> IO ()
+logWithoutSource levelText loggerSetValue msg = do
+    now <- getZonedTime
+    let timestamp = formatTime defaultTimeLocale customTimeFormat now
+    let message = BS.unpack (fromLogStr msg)
+    let line = timestamp ++ " [" ++ levelText ++ "] " ++ message
+    pushLogStrLn loggerSetValue (toLogStr line)
+
 instance Yesod App where
     maximumContentLength _thereIsOnly1AppHere (Just QuerycheckR) = Just useIncreasedSizeLimit
     maximumContentLength _thereIsOnly1AppHere _ = Nothing
     makeLogger _thereIsOnly1AppHere = customizedLogger
+    messageLoggerSource _thereIsOnly1AppHere = messageLoggerWithoutSource
 
 getHealthcheckR :: Handler Value
 getHealthcheckR = returnJson (Healthy True)
@@ -212,29 +245,7 @@ jsonify :: Maybe (Stdout, Stderr) -> QueryEngineResult
 jsonify (Just (Stdout o, Stderr e)) = QueryEngineResult { stdout = o, stderr = e }
 jsonify Nothing = QueryEngineResult { stdout = "", stderr = "timeout: " ++ (show swiplTimeLimitSeconds) }
 
-dateFormatter' :: Maybe UTCTime -> String
-dateFormatter' (Just t) = formatTime defaultTimeLocale customTimeFormat t
-dateFormatter' Nothing = "[00/00/0000 ( 00:00:00 )]"
-
-dateFormatter :: String -> String
-dateFormatter date = dateFormatter' (parseTimeM True defaultTimeLocale "%d/%b/%Y:%T %Z" date :: Maybe UTCTime)
-
-logify :: String -> Network.Wai.Request -> NetworkHTTPTypes.Status -> String
-logify date req _status = let
-    datePart = dateFormatter date
-    method = BS.unpack (Network.Wai.requestMethod req)
-    url = BS.unpack (Network.Wai.rawPathInfo req)
-    in datePart ++ " [Info#(Wai)] " ++ method ++ " " ++ url ++ "\n"
-
-formatter :: Network.Wai.Logger.ZonedDate -> Network.Wai.Request -> NetworkHTTPTypes.Status -> Maybe Integer -> LogStr
-formatter date req status _responseSize = toLogStr (logify (BS.unpack date) req status)
-
-loggerSettings :: Wai.RequestLoggerSettings
-loggerSettings = Wai.defaultRequestLoggerSettings { Wai.outputFormat = Wai.CustomOutputFormat formatter }
-
 main :: IO ()
 main = do
     waiApp <- toWaiAppPlain App
-    myLoggingMiddleware <- Wai.mkRequestLogger loggerSettings
-    let middleware = myLoggingMiddleware . defaultMiddlewaresNoLogging
-    run 3000 $ middleware waiApp
+    run 3000 $ defaultMiddlewaresNoLogging waiApp
