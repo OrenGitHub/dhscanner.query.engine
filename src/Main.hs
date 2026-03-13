@@ -28,7 +28,7 @@ import Control.Concurrent ( forkIO, threadDelay, killThread, ThreadId )
 import Control.Exception ( finally, evaluate )
 import Control.Monad ( join )
 import Data.Time ( defaultTimeLocale, formatTime, getZonedTime )
-import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents )
+import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents, hSetEncoding, utf8 )
 import Data.Word ( Word64 )
 
 newtype Healthy = Healthy Bool deriving ( Generic )
@@ -157,6 +157,7 @@ writeFactsToTempFile facts = do
 
 writeFactsToFileHandle :: [Kbgen.Fact] -> FilePath -> Handle -> IO FilePath
 writeFactsToFileHandle facts filename handle = do
+    hSetEncoding handle utf8
     hPutStr handle (List.unlines (List.map prologify facts))
     hClose handle
     pure filename
@@ -181,6 +182,7 @@ saveAsMainFile content = do
 
 writeMainFileHandle :: T.Text -> FilePath -> Handle -> IO FilePath
 writeMainFileHandle content path handle = do
+    hSetEncoding handle utf8
     TIO.hPutStr handle content
     hClose handle
     pure path
