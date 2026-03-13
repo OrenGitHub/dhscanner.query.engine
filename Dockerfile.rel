@@ -2,6 +2,7 @@ FROM ubuntu:24.04
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends swi-prolog-nox
 RUN rm -rf /var/lib/apt/lists/*
+WORKDIR /queryengine
 COPY utils.pl utils.pl
 COPY template.pl template.pl
 COPY queryengine.elf.x64 .
