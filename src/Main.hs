@@ -205,7 +205,7 @@ swiplProcessConfig path = (proc "swipl" (swiplArgs path)) {
 
 createSwiplProcess :: FilePath -> IO (Maybe (Handle, Handle, ProcessHandle))
 createSwiplProcess path = do
-    (mOut, mErr, _, ph) <- createProcess (swiplProcessConfig path)
+    (_, mOut, mErr, ph) <- createProcess (swiplProcessConfig path)
     pure (case (mOut, mErr) of { (Just out, Just err) -> Just (out, err, ph); _ -> Nothing })
 
 killSwiplProcess :: ProcessHandle -> IO ()
