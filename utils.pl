@@ -5,10 +5,10 @@ problems(Path) :- then_look_for_inter_procedural_prblems(Path).
 
 %find_intra_procedural_problems_first(Path) :- owasp_top_10_intra(Path).
 %find_intra_procedural_problems_first(Path) :- arbitrary_file_write_intra(Path).
-%find_intra_procedural_problems_first(Path) :- arbitrary_file_read_intra(Path).
 %find_intra_procedural_problems_first(Path) :- unsafe_deserialization_intra(Path).
 %find_intra_procedural_problems_first(Path) :- arbitrary_file_deletion_intra(Path).
 find_intra_procedural_problems_first(Path) :- open_redirect_intra(Path).
+find_intra_procedural_problems_first(Path) :- arbitrary_file_read_intra(Path).
 % add more kinds here ...
 
 owasp_top_10_intra(Path) :- injection_intra(Path).

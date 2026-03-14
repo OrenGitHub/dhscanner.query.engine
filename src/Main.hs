@@ -196,7 +196,7 @@ swiplTimeLimitMicroseconds :: Int
 swiplTimeLimitMicroseconds = fromIntegral (swiplTimeLimitSeconds * 1000000)
 
 swiplArgs :: FilePath -> [ String ]
-swiplArgs path = ["--quiet", "--encoding=utf8", "-s", path, "-g", "main", "-t", "halt"]
+swiplArgs path = ["--quiet", "-s", path, "-g", "main", "-t", "halt"]
 
 swiplProcessConfig :: FilePath -> CreateProcess
 swiplProcessConfig path = (proc "swipl" (swiplArgs path)) {
