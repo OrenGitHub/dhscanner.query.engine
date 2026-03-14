@@ -86,7 +86,11 @@ utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Cal
 % add more kinds here ...
 
 utils_arbitrary_file_read_nodejs_sendFile(Call) :-
-    kb_call_resolved(Call, 'res.sendFile').
+    kb_call_resolved(GetRequestHandler, 'express.Router.route.get'),
+    kb_call_method_of_untyped_named_param( Call, 'sendFile', Param ),
+    kb_param_has_name( Param, 'res' ),
+    kb_arg_i_for_call( Lambda, 0, GetRequestHandler ),
+    kb_param_i_of_callable( Param, 1, Lambda ).
 
 utils_arbitrary_file_read_nodejs(Call) :-
     kb_call_resolved(Call, 'fs/promises.readFile').
@@ -168,6 +172,7 @@ user_input_might_reach_function(Fqn, Path) :-
     utils_dataflow_path(UserInput, Call, Path).
 
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_request_handler(UserInput).
 % add more web frameworks here ...
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
@@ -179,6 +184,12 @@ utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
     kb_class_has_3rd_party_super(Class, _, 'tornado.web.RequestHandler'),
     kb_class_has_1st_party_super(Subclass, ClassName, DefinedInFile),
     kb_class_def(Class, ClassName, DefinedInFile).
+
+utils_user_input_originated_from_npm_express_request_handler(Param) :-
+    kb_call_resolved(GetRequestHandler, 'express.Router.route.get'),
+    kb_param_has_name(Param, 'req'),
+    kb_param_i_of_callable(Param, 0, Lambda),
+    kb_arg_i_for_call(Lambda, 0, GetRequestHandler).
 
 utils_intra_dataflow_path(U,V,Path) :-
     between(1,10,N),

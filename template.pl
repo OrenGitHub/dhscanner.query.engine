@@ -17,6 +17,7 @@
 :- discontiguous kb_dataflow_edge/2.
 :- discontiguous kb_callable_annotated_with/2.
 :- discontiguous kb_class_has_resolved_super/2.
+:- discontiguous kb_call_method_of_untyped_named_param/3.
 :- discontiguous kb_callable_annotated_with_user_input_inside_route/2.
 
 :- [ '{KNOWLEDGE_BASE}' ].
