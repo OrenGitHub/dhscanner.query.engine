@@ -158,7 +158,7 @@ writeFactsToTempFile facts = do
 writeFactsToFileHandle :: [Kbgen.Fact] -> FilePath -> Handle -> IO FilePath
 writeFactsToFileHandle facts filename handle = do
     hSetEncoding handle utf8
-    hPutStr handle (List.unlines (List.map prologify facts))
+    hPutStr handle (List.unlines (List.sort (List.map prologify facts)))
     hClose handle
     pure filename
 
