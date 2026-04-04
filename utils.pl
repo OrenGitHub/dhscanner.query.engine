@@ -173,6 +173,7 @@ user_input_might_reach_function(Fqn, Path) :-
 
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_request_handler(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_golang_echo_get_query_param(UserInput).
 % add more web frameworks here ...
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
@@ -191,6 +192,16 @@ utils_user_input_originated_from_npm_express_request_handler(Param) :-
     kb_param_i_of_callable(Param, 0, Lambda),
     kb_arg_i_for_call(Lambda, 0, GetRequestHandler).
 
+utils_user_input_originated_from_golang_echo_get_query_param(QueryParam) :-
+    kb_call_resolved(Call, 'echo.Group.GET'),
+    kb_param_has_resolved_type(Param, 'echo.Context'),
+    kb_call_resolved(QueryParam, 'echo.Context.QueryParam'),
+    kb_arg_i_for_call(Url, 0, Call),
+    kb_const_string(Url, _),
+    kb_arg_i_for_call(Lambda, 1, Call),
+    kb_param_i_of_callable(Param, 0, Lambda),
+    utils_intra_dataflow_path(Param, QueryParam, _).
+
 utils_intra_dataflow_path(U,V,Path) :-
     between(1,10,N),
     utils_bounded_intra_dataflow_path(U,V,N,[U],Path),
@@ -207,28 +218,19 @@ utils_bounded_intra_dataflow_path(A,C,N,Visited,[(A,B)|Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_intra_dataflow_path(B,C,N_MINUS_1,[B|Visited],Path).
 
-utils_dataflow_edge(U, V) :- kb_dataflow_edge(U, V).
+utils_dataflow_path(U,V,Path) :-
+    utils_interprocedural_dataflow_edge(Call,Callee),
+    between(1,5,CallerSideDataflowPathLen),
+    between(1,5,CalleeSideDataflowPathLen),
+    utils_bounded_intra_dataflow_path(U,Call,CallerSideDataflowPathLen,[U],CallerSidePath),
+    utils_bounded_intra_dataflow_path(Callee,V,CalleeSideDataflowPathLen,[U,Call,Callee],CalleeSidePath),
+    \+ member(Callee,[U,Call]),
+    append(CallerSidePath,[(Call,Callee)|CalleeSidePath],Path).
 
-utils_dataflow_edge(Arg, Param) :-
-    kb_arg_for_call(Arg, Call),
-    kb_has_fqn(Call, Fqn),
-    kb_has_fqn(Callable, Fqn),
-    kb_callable_has_param(Callable, Param).
+utils_interprocedural_dataflow_edge(U,V) :- utils_interprocedural_dataflow_edge_from_arg_to_param(U, V).
 
-utils_dataflow_edge(Arg, Param) :-
-    kb_arg_for_call(Arg, Call),
-    kb_last_fqn_part(Call, FqnPart),
-    kb_last_fqn_part(Callable, FqnPart),
-    kb_callable_has_param(Callable, Param).
-
-utils_bounded_dataflow_path(A,B,N,[(A,B)]) :-
-    N >= 1,
-    utils_dataflow_edge(A,B).
-
-utils_bounded_dataflow_path(A,B,N,[(A,C) | Path]) :-
-    N >= 2,
-    utils_dataflow_edge(A,C),
-    N_MINUS_1 is N - 1,
-    utils_bounded_dataflow_path(C,B,N_MINUS_1,Path).
-
-utils_dataflow_path(U,V,Path) :- utils_bounded_dataflow_path(U,V,10,Path).
+utils_interprocedural_dataflow_edge_from_arg_to_param(Arg, Param) :-
+    kb_call_1st_party_func_defined_in_dir(Call, FuncName, FuncDefinedInDir),
+    kb_func_def(Func, FuncName, _, FuncDefinedInDir),
+    kb_arg_i_for_call(Arg, Index, Call),
+    kb_param_i_of_callable(Param, Index, Func).
