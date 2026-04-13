@@ -32,6 +32,10 @@ executable queryengine
 
     main-is: Main.hs
 
+    other-modules:
+        Logging
+        Swipl
+
     build-depends:
         base,
         process,
