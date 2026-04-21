@@ -34,11 +34,6 @@ ssrf_intra(Path) :-
     utils_ssrf(Call),
     utils_intra_dataflow_path(UserInput, Call, Path).
 
-arbitrary_file_write_intra(Path) :-
-    utils_user_input(UserInput),
-    utils_arbitrary_file_write(Arg),
-    utils_dataflow_path(UserInput, Arg, Path).
-
 arbitrary_file_read_intra(Path) :-
     utils_user_input(UserInput),
     utils_arbitrary_file_read(Call),
@@ -74,12 +69,6 @@ utils_sqli_php(Call) :- kb_call_resolved(Call, 'Yii.app.db.createCommand.queryAl
 
 utils_ssrf(Call) :- kb_call_resolved(Call, 'requests.post').
 % add more kinds here ...
-
-utils_arbitrary_file_write(Arg) :- utils_arbitrary_file_write_nodejs(Arg).
-
-utils_arbitrary_file_write_nodejs(Arg) :-
-    kb_has_fqn(Call, 'fs/promises.writeFile'),
-    kb_arg_i_for_call(Arg, 0, Call).
 
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
@@ -250,5 +239,11 @@ utils_interprocedural_dataflow_edge(U,V) :- utils_interprocedural_dataflow_edge_
 utils_interprocedural_dataflow_edge_from_arg_to_param(Arg, Param) :-
     kb_call_1st_party_func_defined_in_dir(Call, FuncName, FuncDefinedInDir),
     kb_func_def(Func, FuncName, _, FuncDefinedInDir),
+    kb_arg_i_for_call(Arg, Index, Call),
+    kb_param_i_of_callable(Param, Index, Func).
+
+utils_interprocedural_dataflow_edge_from_arg_to_param(Arg, Param) :-
+    kb_call_1st_party_func_defined_in_file(Call, FuncName, FuncDefinedInFile),
+    kb_func_def(Func, FuncName, FuncDefinedInFile, _),
     kb_arg_i_for_call(Arg, Index, Call),
     kb_param_i_of_callable(Param, Index, Func).
