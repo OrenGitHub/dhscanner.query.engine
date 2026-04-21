@@ -125,6 +125,7 @@ then_look_for_inter_procedural_prblems(Path) :- owasp_top_10(Path).
 % add more kinds here ...
 
 owasp_top_10(Path) :- ssrf(Path).
+owasp_top_10(Path) :- arbitrary_file_write(Path).
 % add more kinds here ...
 
 injection(Path) :- rce(Path).
@@ -136,8 +137,20 @@ ssrf(Path) :-
     utils_user_input(UserInput),
     utils_dataflow_path(UserInput, Call, Path).
 
+arbitrary_file_write(Path) :-
+    utils_user_input(UserInput),
+    utils_arbitrary_file_write(Arg),
+    utils_dataflow_path(UserInput, Arg, Path).
+
 utils_http_request(Call) :- utils_http_request_go(Call).
 % add more kinds here ...
+
+utils_arbitrary_file_write(Arg) :- utils_arbitrary_file_write_nodejs(Arg).
+% add more kinds here ...
+
+utils_arbitrary_file_write_nodejs(Arg) :-
+    kb_call_resolved(Call, 'fs/promises.writeFile'),
+    kb_arg_i_for_call(Arg, 0, Call).
 
 utils_http_request_go(Call) :-
     kb_call_resolved(Call, 'net/http.Get').
@@ -174,7 +187,12 @@ user_input_might_reach_function(Fqn, Path) :-
 utils_user_input(UserInput) :- utils_user_input_originated_from_pip_tornado_get_query_argument(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_npm_express_request_handler(UserInput).
 utils_user_input(UserInput) :- utils_user_input_originated_from_golang_echo_get_query_param(UserInput).
+utils_user_input(UserInput) :- utils_user_input_originated_from_ts_next_request(UserInput).
 % add more web frameworks here ...
+
+utils_user_input_originated_from_ts_next_request(Param) :-
+    kb_param_has_name(Param, 'req'),
+    kb_param_has_resolved_type(Param, 'next/server.NextRequest').
 
 utils_user_input_originated_from_pip_tornado_get_query_argument(Call) :-
     kb_call_method_of_class(Call, 'get_query_argument', Subclass),
@@ -220,8 +238,8 @@ utils_bounded_intra_dataflow_path(A,C,N,Visited,[(A,B)|Path]) :-
 
 utils_dataflow_path(U,V,Path) :-
     utils_interprocedural_dataflow_edge(Call,Callee),
-    between(1,5,CallerSideDataflowPathLen),
-    between(1,5,CalleeSideDataflowPathLen),
+    between(1,10,CallerSideDataflowPathLen),
+    between(1,10,CalleeSideDataflowPathLen),
     utils_bounded_intra_dataflow_path(U,Call,CallerSideDataflowPathLen,[U],CallerSidePath),
     utils_bounded_intra_dataflow_path(Callee,V,CalleeSideDataflowPathLen,[U,Call,Callee],CalleeSidePath),
     \+ member(Callee,[U,Call]),
