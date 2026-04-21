@@ -22,6 +22,7 @@
 :- discontiguous utils_arbitrary_file_write/1.
 
 :- dynamic kb_call_1st_party_func_defined_in_dir/3.
+:- dynamic kb_call_1st_party_func_defined_in_file/3.
 
 :- [ '{KNOWLEDGE_BASE}' ].
 :- [ '/queryengine/utils' ].
