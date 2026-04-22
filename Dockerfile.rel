@@ -7,6 +7,7 @@ RUN rm -rf /var/lib/apt/lists/*
 WORKDIR /queryengine
 COPY utils.pl utils.pl
 COPY template.pl template.pl
+COPY templates templates
 COPY queryengine.elf.x64 .
 RUN chmod +x queryengine.elf.x64
 CMD ["./queryengine.elf.x64"]

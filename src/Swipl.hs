@@ -26,6 +26,7 @@ import Control.Concurrent ( forkIO, threadDelay, killThread, ThreadId )
 import Control.Exception ( finally, evaluate )
 import Control.Monad ( join )
 import System.IO ( Handle, openTempFile, hPutStr, hClose, hGetContents, hSetEncoding, utf8 )
+import qualified System.IO as IO
 
 newtype Stdout = Stdout String deriving ( Show, Eq )
 newtype Stderr = Stderr String deriving ( Show, Eq )
@@ -74,6 +75,7 @@ saveAsMainFile :: T.Text -> IO FilePath
 saveAsMainFile content = do
     tmpDir <- getTemporaryDirectory
     (path, handle) <- openTempFile tmpDir "main_XXXXXXXX.pl"
+    IO.hPutStrLn IO.stderr ("[queryengine][swipl] generated main prolog file: " ++ path)
     writeMainFileHandle content path handle
 
 writeMainFileHandle :: T.Text -> FilePath -> Handle -> IO FilePath

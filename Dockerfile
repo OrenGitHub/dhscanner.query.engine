@@ -8,6 +8,7 @@ RUN cabal update
 RUN cabal build --only-dependencies
 COPY template.pl template.pl
 COPY utils.pl utils.pl
+COPY templates templates
 COPY src src
 RUN cabal build
 CMD ["cabal", "run"]
