@@ -70,6 +70,20 @@ utils_sqli_php(Call) :- kb_call_resolved(Call, 'Yii.app.db.createCommand.queryAl
 utils_ssrf(Call) :- kb_call_resolved(Call, 'requests.post').
 % add more kinds here ...
 
+utils_http_get_handler_request_object( GetHandler,  RequestObject, Url) :- utils_http_get_handler_request_object_nextjs( GetHandler,  RequestObject, Url).
+utils_http_post_handler_request_object(PostHandler, RequestObject, Url) :- utils_http_post_handler_request_object_nextjs(PostHandler, RequestObject, Url).
+% add more kinds here ...
+
+endswith(StringInput, StringSuffix) :- atom_concat(_, StringSuffix, StringInput).
+
+utils_http_get_handler_request_object_nextjs(GetHandler, RequestObject, Url) :-
+    kb_func_def(GetHandler, 'GET', FileName, Url),
+    endswith(FileName, 'route.ts').
+
+utils_http_post_handler_request_object_nextjs(PostHandler, RequestObject, Url) :-
+    kb_func_def(PostHandler, 'POST', FileName, Url),
+    endswith(FileName, 'route.ts').
+
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
 % add more kinds here ...
