@@ -18,5 +18,5 @@ main :-
 
 print_matches([]) :- !.
 print_matches([(PostHandler, Request, Url)|Tail]) :-
-    format("(~q,~q,~q)~n", [PostHandler, Request, Url]),
+    format("PostHandler(~q)~nRequest(~q)~nUrl(~q)~n~n", [PostHandler, Request, Url]),
     print_matches(Tail).

@@ -78,10 +78,16 @@ endswith(StringInput, StringSuffix) :- atom_concat(_, StringSuffix, StringInput)
 
 utils_http_get_handler_request_object_nextjs(GetHandler, RequestObject, Url) :-
     kb_func_def(GetHandler, 'GET', FileName, Url),
+    kb_param_i_of_callable(RequestObject, _, GetHandler),
+    kb_param_has_name(RequestObject, 'req'),
+    kb_param_has_resolved_type(RequestObject, 'next/server.NextRequest'),
     endswith(FileName, 'route.ts').
 
 utils_http_post_handler_request_object_nextjs(PostHandler, RequestObject, Url) :-
     kb_func_def(PostHandler, 'POST', FileName, Url),
+    kb_param_i_of_callable(RequestObject, _, PostHandler),
+    kb_param_has_name(RequestObject, 'req'),
+    kb_param_has_resolved_type(RequestObject, 'next/server.NextRequest'),
     endswith(FileName, 'route.ts').
 
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).

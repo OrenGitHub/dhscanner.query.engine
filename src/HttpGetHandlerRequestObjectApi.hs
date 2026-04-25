@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HttpPostHandlerRequestObjectApi
+module HttpGetHandlerRequestObjectApi
     ( query
     ) where
 
@@ -17,42 +17,42 @@ import Data.List (stripPrefix)
 import Data.List (dropWhileEnd)
 import Control.Monad.IO.Class (liftIO)
 
-query :: Content.HttpPostHandlerRequestObject -> ApiEnv QueryResult
-query (Content.HttpPostHandlerRequestObject _ limit) = do
+query :: Content.HttpGetHandlerRequestObject -> ApiEnv QueryResult
+query (Content.HttpGetHandlerRequestObject _ limit) = do
     kbFilename <- asksKbFilename
-    liftIO (putStrLn ("[queryengine][api] HttpPostHandlerRequestObject using kb: " ++ kbFilename))
+    liftIO (putStrLn ("[queryengine][api] HttpGetHandlerRequestObject using kb: " ++ kbFilename))
     program <- liftIO (instantiateTemplate kbFilename limit)
     path <- liftIO (saveAsMainFile program)
     liftIO (putStrLn ("[queryengine][api] SWI-Prolog main file path: " ++ path))
     outputOrTimeout <- liftIO (runSwiplWithTimeout path)
     let matches = decodeMatches outputOrTimeout
-    pure (FoundHttpPostHandlerRequestObject Content.FoundHttpPostHandlerRequestObject
-        { Content.foundHttpPostHandlerRequestObjectTotal = fromIntegral (length matches)
-        , Content.foundHttpPostHandlerRequestObjectMatches = matches
+    pure (FoundHttpGetHandlerRequestObject Content.FoundHttpGetHandlerRequestObject
+        { Content.foundHttpGetHandlerRequestObjectTotal = fromIntegral (length matches)
+        , Content.foundHttpGetHandlerRequestObjectMatches = matches
         })
 
 instantiateTemplate :: FilePath -> Word -> IO T.Text
 instantiateTemplate kbFilename limit = do
-    template <- TIO.readFile "templates/templateHttpPostHandlerRequestObject.pl"
+    template <- TIO.readFile "templates/templateHttpGetHandlerRequestObject.pl"
     pure (T.replace "{LIMIT}" (T.pack (show limit))
         (T.replace "{KNOWLEDGE_BASE}" (T.pack kbFilename) template))
 
-decodeMatches :: Maybe (Stdout, a) -> [ Content.FoundHttpPostHandlerRequestObjectMatch ]
+decodeMatches :: Maybe (Stdout, a) -> [ Content.FoundHttpGetHandlerRequestObjectMatch ]
 decodeMatches (Just (Stdout out, _)) = mapMaybe decodeMatch (extractMatchBlocks out)
 decodeMatches _ = []
 
-decodeMatch :: [String] -> Maybe Content.FoundHttpPostHandlerRequestObjectMatch
+decodeMatch :: [String] -> Maybe Content.FoundHttpGetHandlerRequestObjectMatch
 decodeMatch rawLines = do
     (handlerLine:requestLine:urlLine:[]) <- Just (map trim (filter (not . all isSpace) rawLines))
-    handler <- parseTaggedTerm "PostHandler" handlerLine
+    handler <- parseTaggedTerm "GetHandler" handlerLine
     request <- parseTaggedTerm "Request" requestLine
     url <- parseTaggedTerm "Url" urlLine
     handlerLoc <- restoreloc handler
     loc <- restoreloc request
-    pure Content.FoundHttpPostHandlerRequestObjectMatch
-        { Content.foundHttpPostHandlerLocation = handlerLoc
-        , Content.foundHttpPostHandlerRequestObjectLocation = loc
-        , Content.foundHttpPostHandlerRequestObjectMatchUrl = url
+    pure Content.FoundHttpGetHandlerRequestObjectMatch
+        { Content.foundHttpGetHandlerLocation = handlerLoc
+        , Content.foundHttpGetHandlerRequestObjectMatchLocation = loc
+        , Content.foundHttpGetHandlerRequestObjectMatchUrl = url
         }
 
 parseTaggedTerm :: String -> String -> Maybe String

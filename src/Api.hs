@@ -6,9 +6,11 @@ import Kbapi
 import qualified Content
 import ApiEnv (ApiEnv)
 import qualified ConstStringsMatchingApi
+import qualified HttpGetHandlerRequestObjectApi
 import qualified HttpPostHandlerRequestObjectApi
 
 queryApi :: Query -> ApiEnv QueryResult
 queryApi (ConstStringsMatching q) = ConstStringsMatchingApi.query q
+queryApi (HttpGetHandlerRequestObject q) = HttpGetHandlerRequestObjectApi.query q
 queryApi (HttpPostHandlerRequestObject q) = HttpPostHandlerRequestObjectApi.query q
 queryApi _ = pure (FoundConstStringsMatching Content.FoundConstStringsMatching { Content.foundConstStringsMatchingThisRegex = "", Content.foundConstStringsMatchesTotal = 0, Content.foundConstStringsMatches = [] })
