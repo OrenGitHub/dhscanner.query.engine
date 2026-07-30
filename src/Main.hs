@@ -36,9 +36,14 @@ mkYesod "App" [parseRoutes|
 /healthcheck HealthcheckR GET
 |]
 
--- 64MB
+-- 256MB. Bumped from 64MB because phpBB's fact set for /uploadkb
+-- exceeded the old limit, causing the Yesod-level 413 that silently
+-- fell through in workers/queryengine/main.py's run_with_agent_mode.
+-- 256MB is a straight 4x quick-fix; the "right" answer is a shared-
+-- volume handoff so /uploadkb takes a path instead of a body, but
+-- that's a bigger refactor and this unblocks the OWASP demo work.
 useIncreasedSizeLimit :: Word64
-useIncreasedSizeLimit = 64000000
+useIncreasedSizeLimit = 256000000
 
 instance Yesod App where
     maximumContentLength _thereIsOnly1AppHere (Just QuerycheckR) = Just useIncreasedSizeLimit
