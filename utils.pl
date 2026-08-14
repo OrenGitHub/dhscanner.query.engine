@@ -90,6 +90,125 @@ utils_http_post_handler_request_object_nextjs(PostHandler, RequestObject, Url) :
     kb_param_has_resolved_type(RequestObject, 'next/server.NextRequest'),
     endswith(FileName, 'route.ts').
 
+utils_authenticated_http_post_handler_request_object(PostHandler, RequestObject, Url) :-
+    utils_http_post_handler_request_object(PostHandler, RequestObject, Url),
+    kb_called_from(AuthCall, PostHandler),
+    utils_authenticating_function(AuthCall).
+% add more requirements here ...
+
+utils_authenticating_function(Call) :- kb_call_1st_party_func_defined_in_file(Call, 'authenticateRequest', _).
+utils_authenticating_function(Call) :- kb_call_1st_party_func_defined_in_dir(Call, 'authenticateRequest', _).
+% add more authenticator names here (tier-1 catalog) ...
+
+% bounded "early-return authenticating function" recognition — no transitive
+% closure by design. two levels only:
+%   level-0: base name catalog below (asserted by name; structural verification
+%            via an early-return-on-param KB fact is a future step)
+%   level-1: a callable that calls a level-0 authenticator ( single hop )
+
+utils_early_return_authenticating_function_name('authenticateRequest').
+% add more authenticator names here ...
+
+utils_early_return_authenticating_function(Callable) :-
+    kb_func_def(Callable, Name, _, _),
+    utils_early_return_authenticating_function_name(Name).
+
+utils_early_return_authenticating_function(Callable) :-
+    kb_called_from(Call, Callable),
+    utils_call_to_level_0_authenticator(Call).
+
+utils_call_to_level_0_authenticator(Call) :-
+    kb_call_1st_party_func_defined_in_file(Call, Name, _),
+    utils_early_return_authenticating_function_name(Name).
+
+utils_call_to_level_0_authenticator(Call) :-
+    kb_call_1st_party_func_defined_in_dir(Call, Name, _),
+    utils_early_return_authenticating_function_name(Name).
+
+% -----------------------------------------------------------------------------
+% utils_function_returns_bad_http_response( Function )
+%
+% Recognizes callables that emit an *error* http response ( 401 / 403 / 404
+% / 500 / ... ). Together with the db-lookup polarity primitive, this is
+% the second building block of the "happy-path authenticator polarity"
+% compass discussed in the OWASP notes.
+%
+% Layered so that new languages / frameworks / codes are all leaf-additions
+% -- no existing clause needs to change to extend it :
+%
+%     utils_function_returns_bad_http_response( Function ).
+%     |
+%     +-- utils_function_returns_bad_http_response_ts( Function ).      % TypeScript ( nodejs.Response.json )
+%     |   |
+%     |   +-- utils_function_returns_bad_http_response_ts_401( F ).
+%     |   +-- utils_function_returns_bad_http_response_ts_403( F ).
+%     |   +-- utils_function_returns_bad_http_response_ts_404( F ).
+%     |   ... add more "bad" codes here ( 400, 405, 409, 422, 429, 500, ... ) ...
+%     |
+%     ... add more kinds here ( _python, _go, _php, ... ) ...
+%
+% Structural pattern for TypeScript / nodejs :
+%
+%     Response.json( <body>, { status: <bad-code> } )
+%
+% After ts-parser-actions instrumentation this becomes the ast call tree
+%
+%     Response.json( <body>, dictify( kv( "status", <bad-code> ) ) )
+%
+% ( see `TsParser.y::exp_dict` -- object literals lower to a call whose
+%  callee is the bare name `dictify` ; and `TsParserActions.hs::property`
+%  lowers each `k: v` pair to a call whose callee is the instrumented
+%  bare name `<dhscanner-instrumentation>[kv]` with args `[ k, v ]` --
+%  casing is exact ).
+%
+% Known kbgen gap ( scaffolded here, activated by a follow-up version bump ) :
+%
+%     kb_const_int( Loc, Value )
+%
+% is not emitted today ( only kb_const_string / kb_const_bool_true exist
+% -- see `Kbgen.hs::prologify_*` ). Every leaf below already carries its
+% code as data, so adding kb_const_int to kbgen is a *pure activation* :
+% no edit needed here to start discriminating 401 from 403 from 404.
+
+utils_function_returns_bad_http_response(Function) :-
+    utils_function_returns_bad_http_response_ts(Function).
+% add more languages / frameworks here ...
+
+utils_function_returns_bad_http_response_ts(Function) :-
+    utils_function_returns_bad_http_response_ts_401(Function).
+utils_function_returns_bad_http_response_ts(Function) :-
+    utils_function_returns_bad_http_response_ts_403(Function).
+utils_function_returns_bad_http_response_ts(Function) :-
+    utils_function_returns_bad_http_response_ts_404(Function).
+% add more "bad" codes here ...
+
+utils_function_returns_bad_http_response_ts_401(Function) :-
+    utils_ts_response_json_with_status(Function, 401).
+utils_function_returns_bad_http_response_ts_403(Function) :-
+    utils_ts_response_json_with_status(Function, 403).
+utils_function_returns_bad_http_response_ts_404(Function) :-
+    utils_ts_response_json_with_status(Function, 404).
+
+% Structural walk from the outer `nodejs.Response.json` call down through
+% the `dictify( kv( "status", Code ) )` instrumented dict.
+%
+% NOTE: `kb_arg_i_for_call( Arg, Index, Call )` is emitted by kbgen with
+% Call = Bitcode.callLocation and Arg = Bitcode.locationValue of each arg
+% value ( see `Factify.hs::getArgiForCallFacts` ). For the recursive
+% descent into `DictifyCallLoc` and `KvCallLoc` below to unify, those two
+% locations must coincide on call-valued args -- true in SSA-style
+% bitcode, but verify against a real KB the first time this predicate
+% is exercised end-to-end.
+utils_ts_response_json_with_status(Function, Code) :-
+    kb_call_resolved(OuterCall, 'nodejs.Response.json'),
+    kb_arg_i_for_call(DictifyCallLoc, 1, OuterCall),
+    kb_arg_i_for_call(KvCallLoc, _, DictifyCallLoc),
+    kb_arg_i_for_call(KeyLoc, 0, KvCallLoc),
+    kb_const_string(KeyLoc, 'status'),
+    kb_arg_i_for_call(ValueLoc, 1, KvCallLoc),
+    kb_const_int(ValueLoc, Code),
+    kb_called_from(OuterCall, Function).
+
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
 % add more kinds here ...

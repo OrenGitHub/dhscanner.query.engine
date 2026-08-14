@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HttpPostHandlerRequestObjectApi
+module UnauthenticatedHttpPostHandlerRequestObjectApi
     ( query
     ) where
 
@@ -17,23 +17,23 @@ import Data.List (stripPrefix)
 import Data.List (dropWhileEnd)
 import Control.Monad.IO.Class (liftIO)
 
-query :: Content.HttpPostHandlerRequestObject -> ApiEnv QueryResult
-query (Content.HttpPostHandlerRequestObject _ limit) = do
+query :: Content.UnauthenticatedHttpPostHandlerRequestObject -> ApiEnv QueryResult
+query (Content.UnauthenticatedHttpPostHandlerRequestObject _ limit) = do
     kbFilename <- asksKbFilename
-    liftIO (putStrLn ("[queryengine][api] HttpPostHandlerRequestObject using kb: " ++ kbFilename))
+    liftIO (putStrLn ("[queryengine][api] UnauthenticatedHttpPostHandlerRequestObject using kb: " ++ kbFilename))
     program <- liftIO (instantiateTemplate kbFilename limit)
     path <- liftIO (saveAsMainFile program)
     liftIO (putStrLn ("[queryengine][api] SWI-Prolog main file path: " ++ path))
     outputOrTimeout <- liftIO (runSwiplWithTimeout path)
     let matches = decodeMatches outputOrTimeout
-    pure (FoundHttpPostHandlerRequestObject Content.FoundHttpPostHandlerRequestObject
-        { Content.foundHttpPostHandlerRequestObjectTotal = fromIntegral (length matches)
-        , Content.foundHttpPostHandlerRequestObjectMatches = matches
+    pure (FoundUnauthenticatedHttpPostHandlerRequestObject Content.FoundUnauthenticatedHttpPostHandlerRequestObject
+        { Content.foundUnauthenticatedHttpPostHandlerRequestObjectTotal = fromIntegral (length matches)
+        , Content.foundUnauthenticatedHttpPostHandlerRequestObjectMatches = matches
         })
 
 instantiateTemplate :: FilePath -> Word -> IO T.Text
 instantiateTemplate kbFilename limit = do
-    template <- TIO.readFile "templates/templateHttpPostHandlerRequestObject.pl"
+    template <- TIO.readFile "templates/templateUnauthenticatedHttpPostHandlerRequestObject.pl"
     pure (T.replace "{LIMIT}" (T.pack (show limit))
         (T.replace "{KNOWLEDGE_BASE}" (T.pack kbFilename) template))
 
