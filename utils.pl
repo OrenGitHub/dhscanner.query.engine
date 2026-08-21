@@ -90,14 +90,50 @@ utils_http_post_handler_request_object_nextjs(PostHandler, RequestObject, Url) :
     kb_param_has_resolved_type(RequestObject, 'next/server.NextRequest'),
     endswith(FileName, 'route.ts').
 
-utils_authenticated_http_post_handler_request_object(PostHandler, RequestObject, Url) :-
+% AuthenticatedHttpPostHandlerRequestObject query — /5 form.
+%
+% Same shape as `utils_http_post_handler_request_object/3`, extended with
+% the two pieces of metadata that identify /how/ the handler is
+% authenticated :
+%
+%   AuthFuncName : the name of the callable that gates PostHandler
+%                  ( bound from the tier-1 authenticator name catalog
+%                  via `utils_authenticating_function/3` ).
+%
+%   HeaderKey    : the string constant passed to `Request.headers.get(...)`
+%                  inside AuthFunc — bound by the composed structural
+%                  predicate `utils_early_return_null_on_missing_request_header_value/2`.
+%
+% Composition rationale : the catalog side (name) and the structural side
+% (early-return-null on missing header) are already independently shipped
+% in this file ; this predicate is where they finally get joined so both
+% pieces of evidence surface in a single kbapi finding.
+utils_authenticated_http_post_handler_request_object(PostHandler, RequestObject, Url, AuthFuncName, HeaderKey) :-
     utils_http_post_handler_request_object(PostHandler, RequestObject, Url),
     kb_called_from(AuthCall, PostHandler),
-    utils_authenticating_function(AuthCall).
+    utils_authenticating_function(AuthCall, AuthFuncName, AuthFunc),
+    utils_early_return_null_on_missing_request_header_value(AuthFunc, HeaderKey).
 % add more requirements here ...
 
-utils_authenticating_function(Call) :- kb_call_1st_party_func_defined_in_file(Call, 'authenticateRequest', _).
-utils_authenticating_function(Call) :- kb_call_1st_party_func_defined_in_dir(Call, 'authenticateRequest', _).
+% /3 form — binds Name and the resolved 1st-party function definition
+% (Func) so callers can chain further structural checks against
+% AuthFunc's body ( e.g. `utils_early_return_null_on_missing_request_header_value` ).
+utils_authenticating_function(Call, Name, Func) :-
+    kb_call_1st_party_func_defined_in_file(Call, Name, DefFile),
+    utils_authenticating_function_name(Name),
+    kb_func_def(Func, Name, DefFile, _).
+
+utils_authenticating_function(Call, Name, Func) :-
+    kb_call_1st_party_func_defined_in_dir(Call, Name, DefDir),
+    utils_authenticating_function_name(Name),
+    kb_func_def(Func, Name, _, DefDir).
+
+% /1 form — retained as a thin projection over the /3 form so any
+% legacy caller that only cared about "is this a call to an authenticator ?"
+% keeps working.
+utils_authenticating_function(Call) :- utils_authenticating_function(Call, _, _).
+
+utils_authenticating_function_name('authenticateRequest').
 % add more authenticator names here (tier-1 catalog) ...
 
 % bounded "early-return authenticating function" recognition — no transitive
