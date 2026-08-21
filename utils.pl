@@ -126,6 +126,54 @@ utils_call_to_level_0_authenticator(Call) :-
     utils_early_return_authenticating_function_name(Name).
 
 % -----------------------------------------------------------------------------
+% utils_early_return_null_on_missing_request_header_value( Callable, KeyName )
+%
+% Recognises the strict-tier "early return null on missing request-header
+% value" idiom. Concretely, inside `Callable` :
+%
+%     const V = request.headers.get( 'X-Api-Key' );
+%     if ( !V ) return null;
+%
+% Composed from four ingredients :
+%
+%   1. `kb_called_from` + `kb_call_resolved`  : a call to
+%      `nodejs.Request.headers.get` occurs inside Callable.
+%
+%   2. `kb_arg_i_for_call` + `kb_const_string`: the header key name is a
+%      compile-time string ( bound to `KeyName` for downstream ranking ).
+%
+%   3. `kb_gated_return_null`                  : an early-return guard
+%      whose returned value is a null literal ( derived on top of the
+%      more general `kb_gated_return( Cond, ReturnedValue )` fact ).
+%
+%   4. `utils_intra_dataflow_path`             : intra-procedural
+%      dataflow ties `headers.get( KeyName )` -> gate condition value.
+%
+% This is the *strict tier* of the "authenticating function" first gate.
+% The nodejs/nextjs surface receiver is hardcoded here; sibling clauses
+% for other frameworks / receivers can be added as leaf additions -- no
+% existing clause needs to change.
+
+utils_early_return_null_on_missing_request_header_value( Callable, KeyName ) :-
+    kb_called_from( Call, Callable ),
+    kb_call_resolved( Call, 'nodejs.Request.headers.get' ),
+    kb_arg_i_for_call( KeyArg, 0, Call ),
+    kb_const_string( KeyArg, KeyName ),
+    kb_gated_return_null( Cond ),
+    utils_intra_dataflow_path( Call, Cond, _ ).
+
+% kb_gated_return_null( Cond ) : an early-return guard whose returned
+% value is a language-level absence literal ( `null`, `None`, `nil` --
+% all normalised to the same `kb_const_null` fact by kbgen ). Layered on
+% top of the more general `kb_gated_return` fact so that sibling
+% derivations ( e.g. `kb_gated_return_false`, `kb_gated_throw`, ... )
+% can be added later as pure leaf additions.
+
+kb_gated_return_null( Cond ) :-
+    kb_gated_return( Cond, ReturnedValue ),
+    kb_const_null( ReturnedValue ).
+
+% -----------------------------------------------------------------------------
 % utils_function_returns_bad_http_response( Function )
 %
 % Recognizes callables that emit an *error* http response ( 401 / 403 / 404
