@@ -128,6 +128,24 @@ utils_authenticating_function(Call, Name, Func) :-
     utils_authenticating_function_name(Name),
     kb_func_def(Func, Name, _, DefDir).
 
+% Structural /3 clauses -- same shape as the two clauses above but with the
+% name-catalog gate ( `utils_authenticating_function_name/1` ) replaced by
+% the return-values shape gate ( `utils_authenticating_function_by_return_values/1`
+% defined further down ). Name is still bound from the call-resolution
+% fact so downstream callers ( kbapi ) get a human-readable label alongside
+% the structural evidence -- but Name is no longer required to appear in
+% the tier-1 catalog. Rationale : the shape gate IS the evidence.
+
+utils_authenticating_function(Call, Name, Func) :-
+    kb_call_1st_party_func_defined_in_file(Call, Name, DefFile),
+    kb_func_def(Func, Name, DefFile, _),
+    utils_authenticating_function_by_return_values(Func).
+
+utils_authenticating_function(Call, Name, Func) :-
+    kb_call_1st_party_func_defined_in_dir(Call, Name, DefDir),
+    kb_func_def(Func, Name, _, DefDir),
+    utils_authenticating_function_by_return_values(Func).
+
 % /1 form — retained as a thin projection over the /3 form so any
 % legacy caller that only cared about "is this a call to an authenticator ?"
 % keeps working.
@@ -292,6 +310,203 @@ utils_ts_response_json_with_status(Function, Code) :-
     kb_arg_i_for_call(ValueLoc, 1, KvCallLoc),
     kb_const_int(ValueLoc, Code),
     kb_called_from(OuterCall, Function).
+
+% -----------------------------------------------------------------------------
+% utils_return_value_is_bad_http_response( ReturnedValue )
+%
+% Return-value-anchored refinement of `utils_function_returns_bad_http_response/1`.
+% The per-function version above answers "does Function contain, anywhere in
+% its body, at least one bad-http response ?". This per-return version asks
+% the stricter question "is THIS specific return statement's returned value
+% a bad-http response ?" -- anchored on a ReturnedValue location bound by
+% `kb_callable_returns_value/2` ( emitted by kbgen for every explicit return
+% in a callable, plus one parser-injected fall-through at the callable's
+% header location -- see `TsParserActions.hs::ensureCallableBodyEndsWithReturn` ).
+%
+% Same layering as the per-function form so new languages / codes remain
+% pure leaf additions :
+%
+%     utils_return_value_is_bad_http_response( ReturnedValue ).
+%     |
+%     +-- utils_return_value_is_bad_http_response_ts( ReturnedValue ).
+%     |   |
+%     |   +-- ..._ts_401( ReturnedValue ).
+%     |   +-- ..._ts_403( ReturnedValue ).
+%     |   +-- ..._ts_404( ReturnedValue ).
+%     |   ... add more "bad" codes here ...
+%     |
+%     ... add more languages / frameworks here ...
+
+utils_return_value_is_bad_http_response(ReturnedValue) :-
+    utils_return_value_is_bad_http_response_ts(ReturnedValue).
+% add more languages / frameworks here ...
+
+utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
+    utils_return_value_is_bad_http_response_ts_401(ReturnedValue).
+utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
+    utils_return_value_is_bad_http_response_ts_403(ReturnedValue).
+utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
+    utils_return_value_is_bad_http_response_ts_404(ReturnedValue).
+% add more "bad" codes here ...
+
+% 1-hop wrapper case : the returned value is a call to a 1st-party helper
+% whose body itself contains a bad-http response call. Real-world guards
+% rarely inline `Response.json( ... )` directly at each `return` site --
+% they call a named helper like `responses.notAuthenticatedResponse()` or
+% `responses.unauthorizedResponse()` which wraps the actual Response.json
+% one hop deeper. This clause is what makes the shape recogniser fire on
+% those guards without requiring the helpers to be inlined.
+%
+% We deliberately reuse the existing per-function walker
+% `utils_function_returns_bad_http_response/1` on the helper's function
+% definition -- so any bad-http code the per-function walker already knows
+% about ( 401 / 403 / 404 / ... ) is picked up here automatically, and any
+% future leaf-addition to that walker ( 500 / 405 / ... ) extends this
+% wrapper case for free.
+utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
+    utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue).
+
+utils_return_value_is_bad_http_response_ts_401(ReturnedValue) :-
+    utils_ts_response_json_at_with_status(ReturnedValue, 401).
+utils_return_value_is_bad_http_response_ts_403(ReturnedValue) :-
+    utils_ts_response_json_at_with_status(ReturnedValue, 403).
+utils_return_value_is_bad_http_response_ts_404(ReturnedValue) :-
+    utils_ts_response_json_at_with_status(ReturnedValue, 404).
+
+utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue) :-
+    kb_call_1st_party_func_defined_in_file(ReturnedValue, Name, DefFile),
+    kb_func_def(Helper, Name, DefFile, _),
+    utils_function_returns_bad_http_response(Helper).
+
+utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue) :-
+    kb_call_1st_party_func_defined_in_dir(ReturnedValue, Name, DefDir),
+    kb_func_def(Helper, Name, _, DefDir),
+    utils_function_returns_bad_http_response(Helper).
+
+% Same structural walk as `utils_ts_response_json_with_status/2` above, but
+% anchored on the outer call location ( which coincides with the return
+% value's location when the return is `return Response.json( ... )` ) rather
+% than on the enclosing callable. The per-function form composes trivially
+% on top of this predicate :
+%
+%     utils_ts_response_json_with_status( Function, Code ) :-
+%         utils_ts_response_json_at_with_status( OuterCall, Code ),
+%         kb_called_from( OuterCall, Function ).
+%
+% Existing per-function walker is kept inline to keep this diff narrow ; a
+% follow-up can refactor it to route through this predicate.
+utils_ts_response_json_at_with_status(Call, Code) :-
+    kb_call_resolved(Call, 'nodejs.Response.json'),
+    kb_arg_i_for_call(DictifyCallLoc, 1, Call),
+    kb_arg_i_for_call(KvCallLoc, _, DictifyCallLoc),
+    kb_arg_i_for_call(KeyLoc, 0, KvCallLoc),
+    kb_const_string(KeyLoc, 'status'),
+    kb_arg_i_for_call(ValueLoc, 1, KvCallLoc),
+    kb_const_int(ValueLoc, Code).
+
+% -----------------------------------------------------------------------------
+% utils_authenticating_function_by_return_values( Callable )
+%
+% Structural sibling of `utils_authenticating_function_name/1` ( the tier-1
+% NAME catalog above ). This predicate recognises a middleware-guard-shaped
+% callable *by the values it returns* : exactly N bad-http returns plus
+% exactly 1 "fall-through" return ( the parser-injected `return null`
+% anchored at the callable's header location ). That signature IS the
+% signature of a guard middleware -- every failing path emits an HTTP
+% error, the single success path falls through implicitly.
+%
+% Design choice -- no `forall/2` :
+% -------------------------------
+% Instead of one open-ended clause "every non-fall-through return is bad",
+% each candidate arity is enumerated as its own clause :
+%
+%     by_1v1_return_values : 1 bad + 1 fall-through  ( 2 returns total )
+%     by_2v1_return_values : 2 bad + 1 fall-through  ( 3 returns total )
+%     by_3v1_return_values : 3 bad + 1 fall-through  ( 4 returns total )
+%     by_4v1_return_values : 4 bad + 1 fall-through  ( 5 returns total )
+%
+% Rationale :
+%   1. Each shape is a ground rule the demo-driving LLM can inspect verbatim
+%      -- no quantifier semantics to reason about.
+%   2. The fall-through's position ( `ReturnedValue = Callable` ) is named
+%      explicitly per shape instead of being derived post-hoc from a
+%      quantifier.
+%   3. Debuggability : a misfire on one shape is isolated to that clause.
+%   4. Determinism : a K-return callable matches exactly one shape ( the
+%      shape whose bad-count = K - 1 ), so query results dedup by
+%      construction.
+% Cost : O(N) clauses. For N = 4 that is four short clauses ; extension to
+% higher arities is a pure leaf addition per clause.
+%
+% Fall-through convention ( set by the parser ) :
+% ----------------------------------------------
+%     Every callable body has a `return null` synthetically appended, whose
+%     ReturnedValue location coincides with the callable's header location.
+%     In Prolog that means `kb_callable_returns_value( F, F )` for exactly
+%     one return of every well-formed callable. See
+%     `TsParserActions.hs::ensureCallableBodyEndsWithReturn` for the
+%     injection.
+%
+% Bare `return;` cardinality gate :
+% --------------------------------
+%     `kb_callable_returns_without_value( F, _ )` must be empty. Bare
+%     returns are semantically equivalent to fall-throughs but break the
+%     clean "N-bad + 1-fall-through" count. Guards that mix bare and value
+%     returns are rare in practice ; leaf-add a dedicated shape family
+%     here if a real-world case demands it.
+
+utils_authenticating_function_by_return_values(F) :-
+    utils_authenticating_function_by_1v1_return_values(F).
+utils_authenticating_function_by_return_values(F) :-
+    utils_authenticating_function_by_2v1_return_values(F).
+utils_authenticating_function_by_return_values(F) :-
+    utils_authenticating_function_by_3v1_return_values(F).
+utils_authenticating_function_by_return_values(F) :-
+    utils_authenticating_function_by_4v1_return_values(F).
+% add more shape arities here ( by_5v1_return_values, by_6v1_return_values, ... ) ...
+
+% 1v1 : exactly 2 value-returns -- one is a bad-http response, the other is
+% the parser-injected fall-through ( `ReturnedValue = Callable` ). No bare
+% returns anywhere in the body.
+utils_authenticating_function_by_1v1_return_values(F) :-
+    findall(R, kb_callable_returns_value(F, R), Returns),
+    length(Returns, 2),
+    \+ kb_callable_returns_without_value(F, _),
+    select(F, Returns, [Bad1]),
+    utils_return_value_is_bad_http_response(Bad1).
+
+% 2v1 : exactly 3 value-returns -- two are bad-http responses, one is the
+% parser-injected fall-through. No bare returns.
+utils_authenticating_function_by_2v1_return_values(F) :-
+    findall(R, kb_callable_returns_value(F, R), Returns),
+    length(Returns, 3),
+    \+ kb_callable_returns_without_value(F, _),
+    select(F, Returns, [Bad1, Bad2]),
+    utils_return_value_is_bad_http_response(Bad1),
+    utils_return_value_is_bad_http_response(Bad2).
+
+% 3v1 : exactly 4 value-returns -- three are bad-http responses, one is the
+% parser-injected fall-through. No bare returns.
+utils_authenticating_function_by_3v1_return_values(F) :-
+    findall(R, kb_callable_returns_value(F, R), Returns),
+    length(Returns, 4),
+    \+ kb_callable_returns_without_value(F, _),
+    select(F, Returns, [Bad1, Bad2, Bad3]),
+    utils_return_value_is_bad_http_response(Bad1),
+    utils_return_value_is_bad_http_response(Bad2),
+    utils_return_value_is_bad_http_response(Bad3).
+
+% 4v1 : exactly 5 value-returns -- four are bad-http responses, one is the
+% parser-injected fall-through. No bare returns.
+utils_authenticating_function_by_4v1_return_values(F) :-
+    findall(R, kb_callable_returns_value(F, R), Returns),
+    length(Returns, 5),
+    \+ kb_callable_returns_without_value(F, _),
+    select(F, Returns, [Bad1, Bad2, Bad3, Bad4]),
+    utils_return_value_is_bad_http_response(Bad1),
+    utils_return_value_is_bad_http_response(Bad2),
+    utils_return_value_is_bad_http_response(Bad3),
+    utils_return_value_is_bad_http_response(Bad4).
 
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
