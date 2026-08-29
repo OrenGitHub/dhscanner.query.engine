@@ -446,34 +446,25 @@ utils_1st_party_wrapper_helper(ReturnedValue, Helper) :-
 % Existing per-function walker is kept inline to keep this diff narrow ;
 % a follow-up can refactor it to route through this predicate.
 %
-% Note on the missing `kb_const_string(KeyLoc, 'status')` gate :
-% -----------------------------------------------------------
-% The per-function walker `utils_ts_response_json_with_status/2` above
-% has an extra step that binds `KeyLoc = kb_arg_i_for_call(_, 0, kv)` and
-% asserts `kb_const_string(KeyLoc, 'status')` -- to filter out kv-pairs
-% whose key isn't literally `status`. We deliberately omit that gate
-% here because TS/JS object-literal keys written in identifier form
-% ( `{ status: 401, headers }` ) are NOT emitted as `kb_const_string`
-% facts by kbgen : the key `status` is captured as a bare identifier
-% token, not a string constant. Adding the gate makes the predicate
-% never fire in practice ( every real `Response.json({ status: ... })`
-% call site regressed to zero matches before we dropped it -- see the
-% `checkAuth` shape-recognizer CI investigation ).
-%
-% Loosening this to "the OUTER dict has SOME kv-arg whose value is a
-% bad code" is still overwhelmingly specific in the presence of the
-% `kb_call_resolved(_, 'nodejs.Response.json')` anchor : Response.json's
-% second argument is always the init options bag, and int-valued kv
-% pairs in that bag are almost exclusively `status`. If a future
-% codebase abuses the second arg to carry an int-valued non-status
-% field, promote the gate to the more permissive
-% `kb_arg_i_for_call(KeyLoc, 0, KvCallLoc)` + name-carrying-fact
-% variant ( currently requires a kbgen leaf-addition to emit the
-% shorthand-identifier-key name ).
+% The `kb_const_string( KeyLoc, 'status' )` gate keeps this walker
+% honest : without it, ANY int-valued kv-pair inside `Response.json`'s
+% init-options bag would match ( eg `{ retryAfter: 401 }`, hypothetical
+% but possible ). The gate depends on kbgen emitting `kb_const_string`
+% for object-literal identifier-form keys ( `{ status: 401 }` ) --
+% NOT only for quoted-string keys ( `{ "status": 401 }` ). See the
+% `property_key` non-terminal in `TsParser.y` : it lowers BOTH
+% `StringLiteral` and `Identifier` in the key position of a
+% `PropertyAssignment` to `Ast.ExpStr`, so both flow through
+% `getConstStringsFromValue`'s `Bitcode.ConstStrValue` branch in
+% `Factify.hs`. Requires parsers >= 1.1.18-x64 ; earlier images
+% lowered identifier-form keys as `Ast.ExpVar` and this gate
+% silently blocked the walker.
 utils_ts_response_json_at_with_status(Call, Code) :-
     kb_call_resolved(Call, 'nodejs.Response.json'),
     kb_arg_i_for_call(DictifyCallLoc, 1, Call),
     kb_arg_i_for_call(KvCallLoc, _, DictifyCallLoc),
+    kb_arg_i_for_call(KeyLoc, 0, KvCallLoc),
+    kb_const_string(KeyLoc, 'status'),
     kb_arg_i_for_call(ValueLoc, 1, KvCallLoc),
     kb_const_int(ValueLoc, Code).
 
