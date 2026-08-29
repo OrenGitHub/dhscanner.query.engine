@@ -603,6 +603,108 @@ utils_authenticating_function_by_4v1_return_values(F) :-
     utils_return_value_is_bad_http_response(Bad3),
     utils_return_value_is_bad_http_response(Bad4).
 
+% -----------------------------------------------------------------------------
+% utils_capability_verifier( Callable )
+%
+% Recognises "capability verifier" callables : functions that consume a
+% payload plus a signature ( HMAC / JWT / ... ), recompute the expected
+% signature from a shared secret, compare, and return a boolean-ish
+% verdict. When another endpoint hands the request off to this verifier
+% ( eg the H2 endpoint in the formbricks demo ), the verifier IS the
+% authentication gate for that route and H2 should NOT be surfaced as
+% an independently-discoverable endpoint. See `demo/formbricks.md`.
+%
+% Two-tier layout mirrors `utils_authenticating_function` :
+%
+%   tier-1 : name catalog  ( `utils_capability_verifier_name/1` )
+%   tier-2 : structural gate  ( `utils_capability_verifier_by_shape/1` )
+%
+% Both tiers are pure leaf additions -- adding a name or a new crypto
+% leaf never forces any existing clause to change.
+
+utils_capability_verifier(Callable) :-
+    utils_capability_verifier_by_name(Callable).
+utils_capability_verifier(Callable) :-
+    utils_capability_verifier_by_shape(Callable).
+% add more capability-verifier tiers here ...
+
+utils_capability_verifier_by_name(Callable) :-
+    kb_func_def(Callable, Name, _, _),
+    utils_capability_verifier_name(Name).
+
+utils_capability_verifier_name('validateLocalSignedUrl').
+% add more capability verifier names here (tier-1 name catalog) ...
+
+% -----------------------------------------------------------------------------
+% utils_capability_verifier_by_shape( Callable )
+%
+% Structural detector. Fires when `Callable`'s body contains :
+%
+%   (a) a call to a tier-1 crypto leaf ( HMAC digest / JWT verify /
+%       timingSafeEqual / ... -- see `utils_crypto_leaf_call/1` below ) ;
+%
+%   (b) an early-return guard on an equality / inequality comparison
+%       ( `kb_gated_return_on_comparison/4`, defined below on top of
+%       the primitive `kb_gated_return` + `kb_comparison` facts ) ;
+%
+%   (c) intra-procedural dataflow from the crypto leaf call to one side
+%       of the comparison ( symmetric : lhs OR rhs qualifies ).
+%
+% The operator slot ( Op ) is deliberately left unbound : both @==@
+% ( return-false-on-mismatch ) and @!=@ ( return-false-on-mismatch with
+% inverted condition ) are valid capability-verifier shapes.
+
+utils_capability_verifier_by_shape(Callable) :-
+    kb_called_from(CryptoCall, Callable),
+    utils_crypto_leaf_call(CryptoCall),
+    kb_gated_return_on_comparison(Lhs, Rhs, _, _),
+    utils_capability_verifier_dataflow_side(CryptoCall, Lhs, Rhs).
+
+utils_capability_verifier_dataflow_side(CryptoCall, Lhs, _) :-
+    utils_intra_dataflow_path(CryptoCall, Lhs, _).
+utils_capability_verifier_dataflow_side(CryptoCall, _, Rhs) :-
+    utils_intra_dataflow_path(CryptoCall, Rhs, _).
+
+% -----------------------------------------------------------------------------
+% utils_crypto_leaf_call( Call )
+%
+% Tier-1 crypto-leaf catalog. Each clause asserts that `Call` resolves
+% to a well-known cryptographic primitive whose *output* is the value
+% typically compared against untrusted input in a capability-verifier
+% shape. Leaf-only : downstream predicates ( in particular
+% `utils_capability_verifier_by_shape/1` ) treat every clause the same,
+% so new libraries / runtimes are pure leaf additions.
+
+utils_crypto_leaf_call(Call) :- kb_call_resolved(Call, 'nodejs.crypto.createHmac.update.digest').
+utils_crypto_leaf_call(Call) :- kb_call_resolved(Call, 'nodejs.crypto.timingSafeEqual').
+utils_crypto_leaf_call(Call) :- kb_call_resolved(Call, 'nodejs.jsonwebtoken.verify').
+utils_crypto_leaf_call(Call) :- kb_call_resolved(Call, 'nodejs.jose.jwtVerify').
+% add more crypto-leaf FQNs here ...
+
+% -----------------------------------------------------------------------------
+% kb_gated_return_on_comparison( Lhs, Rhs, Op, ReturnedValue )
+%
+% Recognizes early-return guards whose gating expression is a boolean
+% comparison. Composed on top of the two primitive facts :
+%
+%     kb_gated_return( Cond, ReturnedValue )
+%
+%         emitted by kbgen for every gated `if (...) return ...;`.
+%
+%     kb_comparison( Cond, Lhs, Rhs, Op )
+%
+%         emitted by kbgen for every equality / inequality binop ( see
+%         the 'Comparison' fact in `dhscanner-kbgen` ). Op is a Prolog
+%         atom : `eq` for @==@ / @===@ ; `neq` for @!=@ / @!==@.
+%
+% The two facts share the same `Cond` slot on purpose : it is the
+% location of the comparison's output temporary variable, which is
+% exactly the value that ends up feeding the `if`'s assume node.
+
+kb_gated_return_on_comparison(Lhs, Rhs, Op, ReturnedValue) :-
+    kb_gated_return(Cond, ReturnedValue),
+    kb_comparison(Cond, Lhs, Rhs, Op).
+
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
 % add more kinds here ...
