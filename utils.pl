@@ -705,6 +705,83 @@ kb_gated_return_on_comparison(Lhs, Rhs, Op, ReturnedValue) :-
     kb_gated_return(Cond, ReturnedValue),
     kb_comparison(Cond, Lhs, Rhs, Op).
 
+% -----------------------------------------------------------------------------
+% utils_reaches_capability_verifier( Callable, Verifier )
+%
+% Recognises `Callable`s that dispatch to a `Verifier` via a bounded
+% 1st-party call chain. Downstream ranking uses this to mark request
+% handlers ( in particular POST handlers ) that are capability-gated
+% by delegation -- eg the H2 storage POST handler in the formbricks
+% demo which is guarded end-to-end by `validateLocalSignedUrl`. Such
+% handlers should NOT be surfaced as independently-discoverable
+% endpoints ; their reachability is fully mediated by the verifier.
+%
+% Two enumerated arities mirror the `utils_authenticating_function_by_*v1`
+% shape-catalog style ( each hop count is a ground rule an LLM can
+% inspect verbatim, no `between/3` / recursion ) :
+%
+%   utils_reaches_capability_verifier_1hop : direct call.
+%   utils_reaches_capability_verifier_2hop : one intermediate 1st-party
+%                                            callable between them.
+%
+% Bounded on purpose : deeper chains are almost always a sign of a
+% missing tier-1 name entry ( at which point the direct-name gate
+% fires and the hop bound is irrelevant ). Add `_3hop`, `_4hop`, ...
+% clauses here as pure leaf additions if a real-world case demands it.
+%
+% Loop guards :
+%
+%   Middle    \== Callable  ( 2hop )     -- reject Callable -> Callable -> V
+%   Middle    \== Verifier  ( 2hop )     -- reject C -> V -> V ( use 1hop )
+%   Callable  \== Verifier  ( both )     -- a verifier that is itself a
+%                                           `Callable` is already covered
+%                                           by `utils_capability_verifier/1` ;
+%                                           this predicate is strictly for
+%                                           delegated capability gating.
+
+utils_reaches_capability_verifier(Callable, Verifier) :-
+    utils_reaches_capability_verifier_1hop(Callable, Verifier).
+utils_reaches_capability_verifier(Callable, Verifier) :-
+    utils_reaches_capability_verifier_2hop(Callable, Verifier).
+% add more hop-count clauses here ...
+
+utils_reaches_capability_verifier_1hop(Callable, Verifier) :-
+    kb_called_from(Call, Callable),
+    utils_1st_party_call_to_func(Call, Verifier),
+    Callable \== Verifier,
+    utils_capability_verifier(Verifier).
+
+utils_reaches_capability_verifier_2hop(Callable, Verifier) :-
+    kb_called_from(Call1, Callable),
+    utils_1st_party_call_to_func(Call1, Middle),
+    Middle \== Callable,
+    kb_called_from(Call2, Middle),
+    utils_1st_party_call_to_func(Call2, Verifier),
+    Middle \== Verifier,
+    Callable \== Verifier,
+    utils_capability_verifier(Verifier).
+
+% -----------------------------------------------------------------------------
+% utils_1st_party_call_to_func( Call, Func )
+%
+% Small resolver helper : succeeds when `Call` is a call site whose
+% callee is a 1st-party callable definition `Func`. Combines both
+% resolution modes emitted by kbgen ( defined-in-file / defined-in-dir )
+% into a single predicate so higher-level callers don't have to repeat
+% the pair. Kept intentionally near the hop-count predicates that
+% consume it -- the two shape-recognizer clauses of
+% `utils_authenticating_function/3` above use the same two facts
+% inline, on purpose, so the tier-1 name gate stays visible right at
+% the call-resolution step ; this helper is for the hop-count case
+% where we don't have a name gate to interleave.
+
+utils_1st_party_call_to_func(Call, Func) :-
+    kb_call_1st_party_func_defined_in_file(Call, Name, DefFile),
+    kb_func_def(Func, Name, DefFile, _).
+utils_1st_party_call_to_func(Call, Func) :-
+    kb_call_1st_party_func_defined_in_dir(Call, Name, DefDir),
+    kb_func_def(Func, Name, _, DefDir).
+
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs(Call).
 utils_arbitrary_file_read(Call) :- utils_arbitrary_file_read_nodejs_sendFile(Call).
 % add more kinds here ...
