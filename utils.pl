@@ -356,13 +356,6 @@ utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
 % `responses.unauthorizedResponse()` which wraps the actual Response.json
 % one hop deeper. This clause is what makes the shape recogniser fire on
 % those guards without requiring the helpers to be inlined.
-%
-% We deliberately reuse the existing per-function walker
-% `utils_function_returns_bad_http_response/1` on the helper's function
-% definition -- so any bad-http code the per-function walker already knows
-% about ( 401 / 403 / 404 / ... ) is picked up here automatically, and any
-% future leaf-addition to that walker ( 500 / 405 / ... ) extends this
-% wrapper case for free.
 utils_return_value_is_bad_http_response_ts(ReturnedValue) :-
     utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue).
 
@@ -373,34 +366,114 @@ utils_return_value_is_bad_http_response_ts_403(ReturnedValue) :-
 utils_return_value_is_bad_http_response_ts_404(ReturnedValue) :-
     utils_ts_response_json_at_with_status(ReturnedValue, 404).
 
+% Method-call-on-imported-object case ( eg
+% `responses.notAuthenticatedResponse()` ) : kbgen resolves such calls
+% through `kb_call_resolved` with a Haskell-Show-formatted qualifier
+% atom of the form
+%
+%    'FirstPartyImport (FirstPartyImportContent {firstPartyImportedLocation = "<File>", firstPartyImportedName = Just "<Qual>"}).<Method>'
+%
+% `utils_1st_party_wrapper_helper/2` splits that atom on `"` to recover
+% the wrapper's defining file + method name and binds Helper via
+% `kb_func_def/4`. From there we recurse the LEAF bad-http checkers
+% ( `_ts_401` / `_ts_403` / `_ts_404` ) on the wrapper's own returns
+% ( `kb_callable_returns_value/2` -- emitted for every explicit return
+% plus the parser-injected fall-through, see
+% `TsParserActions.hs::ensureCallableBodyEndsWithReturn` ).
+%
+% Bypassing `kb_call_1st_party_func_defined_in_file/3` here is
+% deliberate. That fact is only emitted for BARE function calls (
+% `hasPermission(...)` etc. ), not for method calls on imported objects
+% -- which is exactly the shape every real-world response-helper
+% follows in the formbricks codebase ( and, empirically, in every
+% other nextjs app we've looked at ).
+%
+% Calling `_ts_401` / `_ts_403` / `_ts_404` directly ( rather than the
+% dispatcher `utils_return_value_is_bad_http_response_ts/1` ) caps
+% recursion at exactly one wrapper hop. A future multi-hop version
+% ( eg a wrapper that itself wraps another wrapper ) can leaf-add a
+% dedicated `_via_1st_party_wrapper_wrapper` clause without touching
+% the leaves.
 utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue) :-
-    kb_call_1st_party_func_defined_in_file(ReturnedValue, Name, DefFile),
-    kb_func_def(Helper, Name, DefFile, _),
-    utils_function_returns_bad_http_response(Helper).
-
+    utils_1st_party_wrapper_helper(ReturnedValue, Helper),
+    kb_callable_returns_value(Helper, HelperReturn),
+    utils_return_value_is_bad_http_response_ts_401(HelperReturn).
 utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue) :-
-    kb_call_1st_party_func_defined_in_dir(ReturnedValue, Name, DefDir),
-    kb_func_def(Helper, Name, _, DefDir),
-    utils_function_returns_bad_http_response(Helper).
+    utils_1st_party_wrapper_helper(ReturnedValue, Helper),
+    kb_callable_returns_value(Helper, HelperReturn),
+    utils_return_value_is_bad_http_response_ts_403(HelperReturn).
+utils_return_value_is_bad_http_response_via_1st_party_wrapper(ReturnedValue) :-
+    utils_1st_party_wrapper_helper(ReturnedValue, Helper),
+    kb_callable_returns_value(Helper, HelperReturn),
+    utils_return_value_is_bad_http_response_ts_404(HelperReturn).
 
-% Same structural walk as `utils_ts_response_json_with_status/2` above, but
-% anchored on the outer call location ( which coincides with the return
-% value's location when the return is `return Response.json( ... )` ) rather
-% than on the enclosing callable. The per-function form composes trivially
-% on top of this predicate :
+% Extract the wrapper's ( DefFile, Method ) from a `kb_call_resolved`
+% whose resolved-name atom follows the FirstPartyImport Haskell-Show
+% format documented above. Splits on `"` and re-checks structural
+% anchors so non-FirstPartyImport shapes ( `os/exec.Command`,
+% `nodejs.Response.json`, `Yii.app.db.createCommand.queryAll`, etc. )
+% cleanly FAIL rather than return garbage extractions :
+%
+%   Chunk[0] -- unused ; the fixed prefix
+%              `FirstPartyImport (... firstPartyImportedLocation = `.
+%   Chunk[1] -- the file path, bound to `File`.
+%   Chunk[2..3] -- unused ; the qualifier name between the quotes.
+%   Chunk[4] -- starts with `}).` followed by the method name ;
+%              stripping the sentinel binds `Method`.
+%
+% The 5-part unification is the actual reject-non-matching-shapes gate
+% -- atoms without four `"` characters ( eg `os/exec.Command` )
+% produce a 1-element split_string result and fail here immediately.
+utils_1st_party_wrapper_helper(ReturnedValue, Helper) :-
+    kb_call_resolved(ReturnedValue, ResolvedName),
+    atom_string(ResolvedName, S),
+    split_string(S, "\"", "", [_, FileStr, _, _, TailStr]),
+    string_concat("}).", MethodStr, TailStr),
+    atom_string(File, FileStr),
+    atom_string(Method, MethodStr),
+    kb_func_def(Helper, Method, File, _).
+
+% Same structural walk as `utils_ts_response_json_with_status/2` above,
+% but anchored on the outer call location ( which coincides with the
+% return value's location when the return is `return Response.json( ... )` )
+% rather than on the enclosing callable. The per-function form composes
+% trivially on top of this predicate :
 %
 %     utils_ts_response_json_with_status( Function, Code ) :-
 %         utils_ts_response_json_at_with_status( OuterCall, Code ),
 %         kb_called_from( OuterCall, Function ).
 %
-% Existing per-function walker is kept inline to keep this diff narrow ; a
-% follow-up can refactor it to route through this predicate.
+% Existing per-function walker is kept inline to keep this diff narrow ;
+% a follow-up can refactor it to route through this predicate.
+%
+% Note on the missing `kb_const_string(KeyLoc, 'status')` gate :
+% -----------------------------------------------------------
+% The per-function walker `utils_ts_response_json_with_status/2` above
+% has an extra step that binds `KeyLoc = kb_arg_i_for_call(_, 0, kv)` and
+% asserts `kb_const_string(KeyLoc, 'status')` -- to filter out kv-pairs
+% whose key isn't literally `status`. We deliberately omit that gate
+% here because TS/JS object-literal keys written in identifier form
+% ( `{ status: 401, headers }` ) are NOT emitted as `kb_const_string`
+% facts by kbgen : the key `status` is captured as a bare identifier
+% token, not a string constant. Adding the gate makes the predicate
+% never fire in practice ( every real `Response.json({ status: ... })`
+% call site regressed to zero matches before we dropped it -- see the
+% `checkAuth` shape-recognizer CI investigation ).
+%
+% Loosening this to "the OUTER dict has SOME kv-arg whose value is a
+% bad code" is still overwhelmingly specific in the presence of the
+% `kb_call_resolved(_, 'nodejs.Response.json')` anchor : Response.json's
+% second argument is always the init options bag, and int-valued kv
+% pairs in that bag are almost exclusively `status`. If a future
+% codebase abuses the second arg to carry an int-valued non-status
+% field, promote the gate to the more permissive
+% `kb_arg_i_for_call(KeyLoc, 0, KvCallLoc)` + name-carrying-fact
+% variant ( currently requires a kbgen leaf-addition to emit the
+% shorthand-identifier-key name ).
 utils_ts_response_json_at_with_status(Call, Code) :-
     kb_call_resolved(Call, 'nodejs.Response.json'),
     kb_arg_i_for_call(DictifyCallLoc, 1, Call),
     kb_arg_i_for_call(KvCallLoc, _, DictifyCallLoc),
-    kb_arg_i_for_call(KeyLoc, 0, KvCallLoc),
-    kb_const_string(KeyLoc, 'status'),
     kb_arg_i_for_call(ValueLoc, 1, KvCallLoc),
     kb_const_int(ValueLoc, Code).
 
@@ -465,10 +538,38 @@ utils_authenticating_function_by_return_values(F) :-
     utils_authenticating_function_by_4v1_return_values(F).
 % add more shape arities here ( by_5v1_return_values, by_6v1_return_values, ... ) ...
 
+% Enumeration idiom -- `kb_callable_returns_value(F, F)` :
+% ------------------------------------------------------
+% Every clause below opens with `kb_callable_returns_value(F, F)`. That
+% is NOT decorative -- it is what enumerates F over callables when the
+% caller queries the shape predicate with F unbound ( eg
+% `findall(F, utils_authenticating_function_by_return_values(F), _)` ).
+%
+% Without this leading goal, the subsequent `findall(R,
+% kb_callable_returns_value(F, R), Returns)` would fire with an
+% UNBOUND F -- Prolog's `findall/3` unifies R against every
+% `kb_callable_returns_value(_, _)` fact in the KB, producing a single
+% giant list mixed across ALL callables and never hitting the
+% `length(Returns, K)` cardinality gate. That was the exact bug the
+% initial CI run of this predicate surfaced ( MATCH_COUNT: 0 despite
+% checkAuth being locally verified to fit the 3v1 shape ).
+%
+% `kb_callable_returns_value(F, F)` uses the parser-injected
+% fall-through as the enumerator : every well-formed callable body has
+% exactly one such fact where the ReturnedValue location coincides
+% with the callable's own header location ( see
+% `TsParserActions.hs::ensureCallableBodyEndsWithReturn` ). One fact
+% per callable means F is enumerated ONCE per candidate -- no
+% duplicate shape checks. Callables that lack a fall-through ( eg an
+% AST that never went through `ensureCallableBodyEndsWithReturn` )
+% are correctly excluded here : the shape predicate is only sound
+% under the fall-through convention anyway.
+
 % 1v1 : exactly 2 value-returns -- one is a bad-http response, the other is
 % the parser-injected fall-through ( `ReturnedValue = Callable` ). No bare
 % returns anywhere in the body.
 utils_authenticating_function_by_1v1_return_values(F) :-
+    kb_callable_returns_value(F, F),
     findall(R, kb_callable_returns_value(F, R), Returns),
     length(Returns, 2),
     \+ kb_callable_returns_without_value(F, _),
@@ -478,6 +579,7 @@ utils_authenticating_function_by_1v1_return_values(F) :-
 % 2v1 : exactly 3 value-returns -- two are bad-http responses, one is the
 % parser-injected fall-through. No bare returns.
 utils_authenticating_function_by_2v1_return_values(F) :-
+    kb_callable_returns_value(F, F),
     findall(R, kb_callable_returns_value(F, R), Returns),
     length(Returns, 3),
     \+ kb_callable_returns_without_value(F, _),
@@ -488,6 +590,7 @@ utils_authenticating_function_by_2v1_return_values(F) :-
 % 3v1 : exactly 4 value-returns -- three are bad-http responses, one is the
 % parser-injected fall-through. No bare returns.
 utils_authenticating_function_by_3v1_return_values(F) :-
+    kb_callable_returns_value(F, F),
     findall(R, kb_callable_returns_value(F, R), Returns),
     length(Returns, 4),
     \+ kb_callable_returns_without_value(F, _),
@@ -499,6 +602,7 @@ utils_authenticating_function_by_3v1_return_values(F) :-
 % 4v1 : exactly 5 value-returns -- four are bad-http responses, one is the
 % parser-injected fall-through. No bare returns.
 utils_authenticating_function_by_4v1_return_values(F) :-
+    kb_callable_returns_value(F, F),
     findall(R, kb_callable_returns_value(F, R), Returns),
     length(Returns, 5),
     \+ kb_callable_returns_without_value(F, _),
