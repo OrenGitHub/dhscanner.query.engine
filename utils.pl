@@ -937,6 +937,66 @@ utils_bounded_intra_dataflow_path(A,C,N,Visited,[(A,B)|Path]) :-
     N_MINUS_1 is N - 1,
     utils_bounded_intra_dataflow_path(B,C,N_MINUS_1,[B|Visited],Path).
 
+% -----------------------------------------------------------------------------
+% utils_url_flows_to_return_value( URLCall, Callable, ReturnedValue )
+%
+% Recognises `URLCall` sites -- resolved instances of the Node.js/global
+% `URL` constructor -- whose produced value flows via at most 5 SSA
+% dataflow hops into an explicit `ReturnedValue` of the enclosing
+% first-party `Callable`. The FQN `nodejs.URL` is pinned by the parser
+% side ( see `instrumentNodejsURLType` in `TsParserActions.hs`, which
+% mirrors the same synthetic-import trick already used for
+% `nodejs.Request` and `nodejs.Response` ), so any `new URL( ... )`
+% expression in TS/JS source lands as a single stable `kb_call_resolved`
+% row -- independent of whether the file explicitly imports `URL` or
+% just relies on it being a Node.js/browser global.
+%
+% This is the KB-side witness that the URL literal built at `URLCall`
+% is genuinely part of the function's output ( eg the H1 signer's
+% `signedUrl` / `fileUrl` fields in formbricks's `getUploadSignedUrl` ),
+% not a locally-scoped helper variable that gets discarded before the
+% return.
+%
+% Composition :
+%
+%   1. `kb_call_resolved( URLCall, 'nodejs.URL' )`
+%        -- URLCall is a `new URL( ... )` construction site, resolved
+%        via the parser-injected synthetic import.
+%   2. `kb_called_from( URLCall, Callable )`
+%        -- URLCall is lexically inside `Callable`, so the intra-
+%        procedural dataflow graph rooted at `Callable` contains it.
+%   3. `kb_callable_returns_value( Callable, ReturnedValue )`
+%        -- ReturnedValue is the temp at one of `Callable`'s explicit
+%        `return` statements ( kbgen emits one row per return ).
+%   4. `utils_bounded_intra_dataflow_path( URLCall, ReturnedValue, 5, ... )`
+%        -- there is an SSA dataflow path of length <= 5 from URLCall's
+%        produced temp to ReturnedValue.
+%
+% Bound choice : 5 hops accommodates the empirically-seen chain shape
+%
+%     new URL( ... )   ->   .href   ->   { key: _ }   ->   return
+%
+% which uses ~3 edges in the SSA graph, with ~2 hops of headroom for
+% wrappers ( eg `String( new URL( ... ).href )` or a local intermediate
+% assignment ). Deeper flows are almost always a false positive at
+% this recognition step -- if a URL constructed 8+ hops away eventually
+% reaches a return, the URL's role in the returned value has usually
+% been mediated by an intervening transformation ( JSON serialization,
+% concatenation, ... ) and needs a domain-specific rule anyway. Raise
+% the bound in-place if a concrete regression pushes past 5.
+%
+% Load-bearing for the OWASP-2026 URL-emitter recognizer ( see
+% `demo/formbricks.md`, Task G ) : this predicate is the KB-side
+% "does this handler emit a URL literal in its response body ?"
+% primitive, on top of which the const-ratio ranking + kbapi
+% hop-chain metadata sit.
+
+utils_url_flows_to_return_value(URLCall, Callable, ReturnedValue) :-
+    kb_call_resolved(URLCall, 'nodejs.URL'),
+    kb_called_from(URLCall, Callable),
+    kb_callable_returns_value(Callable, ReturnedValue),
+    utils_bounded_intra_dataflow_path(URLCall, ReturnedValue, 5, [URLCall], _).
+
 utils_dataflow_path(U,V,Path) :-
     utils_interprocedural_dataflow_edge(Call,Callee),
     between(1,10,CallerSideDataflowPathLen),
